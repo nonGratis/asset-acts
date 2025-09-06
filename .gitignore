@@ -1,0 +1,80 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.virtualenv/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage
+htmlcov/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+.tox/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# macOS
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints
+
+# Logs and reports
+logs/
+*.log
+
+# Local env and secrets
+.env
+.env.* 
+.env.json
+secrets.json
+*.secret
+*.key
+*.pem
+
+# Google service account keys (DO NOT commit)
+service_account*.json
+*-credentials.json
+credentials.json
+
+# OS files
+Thumbs.db
+desktop.ini
+
+# Mypy, pytype, other caches
+.mypy_cache/
+.pytype/
+
+# Coverage reports
+coverage.xml
+*.cover
+nosetests.xml
+
+# Build artifacts
+*.egg
+*.whl
+# Other
+*.bak
+*.swp
