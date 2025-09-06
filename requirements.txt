@@ -1,0 +1,20 @@
+# Google APIs & auth
+google-api-python-client>=2.70.0
+google-auth>=2.20.0
+google-auth-httplib2>=0.1.0
+google-auth-oauthlib>=1.0.0
+
+# Google Sheets convenience client
+gspread>=5.9.0
+
+# Docs/Word generation (alternative: generate .docx locally and upload)
+python-docx>=0.8.11
+docxtpl>=0.17.0
+
+# Formatting, timezone, env handling
+babel>=2.12.1
+pytz>=2023.3
+python-dotenv>=1.0.0
+
+# Utilities / HTTP
+requests>=2.31.0
