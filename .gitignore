@@ -79,3 +79,7 @@ nosetests.xml
 # Other
 *.bak
 *.swp
+
+# Output documents
+output_docs/
+*.docx
