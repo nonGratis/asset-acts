@@ -9,6 +9,7 @@ venv/
 env/
 ENV/
 .virtualenv/
+*.json
 
 # Distribution / packaging
 build/
