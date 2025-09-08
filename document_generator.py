@@ -28,10 +28,7 @@ ASSETS_SHEET_NAME = "list"
 DEPARTMENTS_SPREADSHEET_ID = "1N45PcHU-YgpcYEyXDbQRCG94I-BWbrultIyqRr5Z4N8"
 DEPARTMENTS_SHEET_NAME = "Department"
 
-TEMPLATE_DOC_ID = "1s6ZWVpMY3g3LU7IYM4fFyRG6mPfh0yy5_xzq5KVMIsI"
-OUTPUT_FOLDER_ID = "1DHm3RDZU_0-dKKKqpw5qHPwV8E7MIfA4"  # Drive folder id (optional if local fallback)
-
-OUTPUT_LOCAL_DIR = "output_docs"  # where .docx files will be saved if Drive unavailable
+OUTPUT_LOCAL_DIR = "output_docs"
 
 # Columns (1-based)
 COL_ID = 1
@@ -94,7 +91,6 @@ def check_constants() -> None:
     for keyname, value in (
         ("ASSETS_SPREADSHEET_ID", ASSETS_SPREADSHEET_ID),
         ("DEPARTMENTS_SPREADSHEET_ID", DEPARTMENTS_SPREADSHEET_ID),
-        ("TEMPLATE_DOC_ID", TEMPLATE_DOC_ID),
     ):
         if not value:
             missing.append(f"Missing constant {keyname}")
@@ -492,7 +488,9 @@ def save_docx_locally(template_path: str, output_path: str, mapping: dict, items
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     doc.save(output_path)
 
-def create_act_docs(drive_service, docs_service, per_owner: Dict[str, Any], use_local_fallback: bool) -> List[Dict[str, Any]]:
+
+def create_act_docs_local(per_owner: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Save all documents locally (no Drive interaction)."""
     created = []
     for code, data in per_owner.items():
         if not data["items"]:
@@ -500,144 +498,40 @@ def create_act_docs(drive_service, docs_service, per_owner: Dict[str, Any], use_
             continue
 
         dept = data["dept"]
-
-        file_name = FILE_NAME_PATTERN.format(
-            deptname=dept.get("code"),
-        )
-
+        file_name = FILE_NAME_PATTERN.format(deptname=dept.get("code"))
         mapping = build_mapping_for_owner(data, dept)
 
-        if use_local_fallback:
-            try:
-                out_path = os.path.join(OUTPUT_LOCAL_DIR, f"{safe_filename(file_name)}.docx")
-
-                save_docx_locally(
-                    template_path="template.docx",
-                    output_path=out_path,
-                    mapping=mapping,
-                    items=data["items"]
-                )
-                info(f'Created local doc "{out_path}" - items={len(data["items"])} - sum={fmt_number(data["tot_sum"]) }')
-                created.append({
-                    "local_path": out_path,
-                    "name": file_name,
-                    "items": len(data["items"]),
-                    "sum": data["tot_sum"]
-                })
-            except Exception as e:
-                error(f"Local save failed for {code}: {e}")
-            continue
-
-        # Drive-based creation (unchanged path)
         try:
-            copy_body = {"name": file_name, "parents": [OUTPUT_FOLDER_ID]}
-            newfile = drive_service.files().copy(fileId=TEMPLATE_DOC_ID, body=copy_body, fields="id,name").execute()
-            new_id = newfile["id"]
-        except HttpError as e:
-            error(f"Failed to copy template for {code}: {e}")
-            continue
-
-        # Refresh mapping if we prefer fullname in docs
-        mapping = build_mapping_for_owner(data, dept)
-        # ensure SecondDirectorName is fullname here
-        mapping["SecondDirectorName"] = dept.get("fullname", mapping.get("SecondDirectorName"))
-
-        try:
-            # replace placeholders and append simple text table
-            requests = []
-            for key, val in mapping.items():
-                token = f"%{key}%"
-                requests.append({
-                    "replaceAllText": {
-                        "containsText": {"text": token, "matchCase": True},
-                        "replaceText": val
-                    }
-                })
-            if requests:
-                docs_service.documents().batchUpdate(documentId=new_id, body={"requests": requests}).execute()
-            # append text block
-            lines = []
-            hdr = ["№", "Назва", "Інв. номер", "Од.", "К-сть", "Ціна од.", "Сума", "Примітка"]
-            lines.append(" | ".join(hdr))
-            lines.append("-" * 80)
-            for i, it in enumerate(data["items"], start=1):
-                row = [
-                    str(i), it["name"], str(it["inventory"]), str(it["unit"]),
-                    str(it["qty"]), fmt_number(it["unit_price"]), fmt_number(it["sum"]), it.get("note", "")
-                ]
-                lines.append(" | ".join(row))
-            lines.append("-" * 80)
-            lines.append(f"Всього: К-сть = {data['tot_qty']}; Сума = {fmt_number(data['tot_sum'])}")
-            block = "\n".join(lines) + "\n\n"
-            doc = docs_service.documents().get(documentId=new_id).execute()
-            end_index = doc.get("body", {}).get("content", [])[-1].get("endIndex", 1)
-            docs_service.documents().batchUpdate(documentId=new_id, body={
-                "requests": [
-                    {"insertText": {"location": {"index": end_index - 1}, "text": block}}
-                ]
-            }).execute()
-            info(f'Created doc "{file_name}" - drive_file_id={new_id} - items={len(data["items"])} - sum={fmt_number(data["tot_sum"]) }')
-            created.append({"file_id": new_id, "name": file_name, "items": len(data["items"]), "sum": data["tot_sum"]})
-        except HttpError as e:
-            error(f"Docs API error while filling doc for {code}: {e}")
-            try:
-                drive_service.files().delete(fileId=new_id).execute()
-            except Exception:
-                pass
+            out_path = os.path.join(OUTPUT_LOCAL_DIR, f"{safe_filename(file_name)}.docx")
+            save_docx_locally(
+                template_path="template.docx",
+                output_path=out_path,
+                mapping=mapping,
+                items=data["items"],
+            )
+            info(f'Created local doc "{out_path}" - items={len(data["items"])} - sum={fmt_number(data["tot_sum"]) }')
+            created.append({
+                "local_path": out_path,
+                "name": file_name,
+                "items": len(data["items"]),
+                "sum": data["tot_sum"],
+            })
+        except Exception as e:
+            error(f"Local save failed for {code}: {e}")
             continue
 
     return created
 
 
-def check_drive_permissions(drive_service) -> Tuple[bool, bool]:
-    try:
-        drive_service.files().get(fileId=TEMPLATE_DOC_ID, fields="id").execute()
-    except HttpError as e:
-        error(f"Cannot access template doc {TEMPLATE_DOC_ID}: {e}")
-        return False, True
-
-    if not OUTPUT_FOLDER_ID:
-        warning("OUTPUT_FOLDER_ID not set; using local output only.")
-        return False, True
-
-    try:
-        drive_service.files().get(fileId=OUTPUT_FOLDER_ID, fields="id").execute()
-    except HttpError as e:
-        warning(f"Cannot access output folder {OUTPUT_FOLDER_ID}: {e}. Using local output.")
-        return False, True
-
-    info("Drive template and folder accessible.")
-    return True, False
-
-
 def main():
     check_constants()
     sheets_svc, drive_svc, docs_svc = build_services()
-    
-        # verify that the provided ASSETS and DEPARTMENTS IDs are actual Google Spreadsheets
+
     try:
         ensure_file_is_spreadsheet(drive_svc, ASSETS_SPREADSHEET_ID, "Assets spreadsheet")
         ensure_file_is_spreadsheet(drive_svc, DEPARTMENTS_SPREADSHEET_ID, "Departments spreadsheet")
     except SystemExit:
         raise
-    
-    drive_ok, use_local = check_drive_permissions(drive_svc)
-    
-    
-    try:
-        # ensure template contains placeholders (best-effort)
-        try:
-            doc = docs_svc.documents().get(documentId=TEMPLATE_DOC_ID).execute()
-            txt = ""
-            for el in doc.get("body", {}).get("content", []):
-                for e in el.get("paragraph", {}).get("elements", []):
-                    txt += e.get("textRun", {}).get("content", "")
-            if "%" not in txt and TABLE_PLACEHOLDER_TOKEN not in txt:
-                warning("Template does not contain %...% placeholders nor table placeholder; script will still proceed.")
-        except HttpError as ex:
-            warning(f"Could not read template placeholders (Docs API): {ex}; proceeding (local fallback may use basic template).")
-    except Exception:
-        pass
 
     info(f"Start processing assets spreadsheet (ID={ASSETS_SPREADSHEET_ID})")
     departments = load_departments(sheets_svc)
@@ -647,7 +541,7 @@ def main():
         summary("No valid owners/items found; nothing to generate.")
         return
 
-    created = create_act_docs(drive_svc if drive_ok else None, docs_svc, per_owner, use_local or not drive_ok)
+    created = create_act_docs_local(per_owner)
 
     summary(f"rows_processed={stats['rows_processed']}, rows_skipped={stats['rows_skipped']}, owners_skipped={stats['owners_skipped']}, acts_generated={len(created)}, items_in_acts={stats['total_items_in_acts']}, total_value_generated={fmt_number(stats['total_value_generated'])}")
 
