@@ -396,23 +396,6 @@ def safe_filename(name: str) -> str:
     return re.sub(r'[\\/*?:"<>|]', "_", name)
 
 
-
-def clone_row_preserve_fonts(row):
-    """Deep-copy a table row preserving run fonts (v03_force_font_run)."""
-    new_row = copy.deepcopy(row._tr)
-    return new_row
-
-def set_cell_text_with_font(cell, text, font_name="Times New Roman", font_size=12):
-    """Replace cell text while preserving font."""
-    cell.text = ""
-    p = cell.add_paragraph()
-    run = p.add_run(str(text))
-    run.font.name = font_name
-    run._element.rPr.rFonts.set(qn("w:ascii"), font_name)
-    run._element.rPr.rFonts.set(qn("w:hAnsi"), font_name)
-    run.font.size = Pt(font_size)
-
-
 def insert_items_v03_force_font(asset_table, header_idx, items):
     fmt_row = asset_table.rows[header_idx + 1] if header_idx + 1 < len(asset_table.rows) else asset_table.rows[header_idx]
     fmt_tr = fmt_row._tr
