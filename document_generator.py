@@ -398,25 +398,38 @@ def build_mapping_for_owner(data: Dict[str, Any], dept: Dict[str, str]) -> Dict[
 def safe_filename(name: str) -> str:
     return re.sub(r'[\\/*?:"<>|]', "_", name)
 
-
-def insert_items_v03_force_font(asset_table, header_idx, items):
+def add_assets_preserve_formatting(asset_table, header_idx, items):
     fmt_row = asset_table.rows[header_idx + 1] if header_idx + 1 < len(asset_table.rows) else asset_table.rows[header_idx]
     fmt_tr = fmt_row._tr
 
-    # Determine insertion point (last row before numbering row)
-    insert_after_tr = fmt_tr
+    # find totals row first cell containing 'всього'
+    totals_row = None
     for r in asset_table.rows[header_idx + 1:]:
-        first_cell_text = (r.cells[0].text or "").strip()
-        if first_cell_text == "1":  # numbering row
+        first = (r.cells[0].text or "").strip().lower()
+        if first.startswith("всього"):
+            totals_row = r
             break
-        insert_after_tr = r._tr
 
-    cursor_tr = insert_after_tr
+    # find numbering row where first cell == "1"
+    if totals_row is None:
+        for r in asset_table.rows[header_idx + 1:]:
+            if (r.cells[0].text or "").strip() == "1":
+                totals_row = r
+                break
+
+    # If still not, append before the last row
+    if totals_row is None:
+        totals_tr = asset_table.rows[-1]._tr
+    else:
+        totals_tr = totals_row._tr
+
+    # insrt items before totals_tr
     for it in items:
-        clone = copy.deepcopy(fmt_tr)
-        cursor_tr.addnext(clone)
-        cursor_tr = clone
-        tgt_row = asset_table.rows[[r._tr for r in asset_table.rows].index(clone)]
+        clone_tr = copy.deepcopy(fmt_tr)
+        totals_tr.addprevious(clone_tr)
+
+        # find the newly inserted row object in asset_table.rows
+        new_row = next(r for r in asset_table.rows if r._tr == clone_tr)
 
         unit_price_formatted = fmt_number(it.get("unit_price", Decimal("0.00"))) if it.get("unit_price") is not None else ""
         sum_formatted = fmt_number(it.get("sum", Decimal("0.00"))) if it.get("sum") is not None else ""
@@ -431,26 +444,28 @@ def insert_items_v03_force_font(asset_table, header_idx, items):
             str(it.get("note", "")),
         ]
 
-        for idx, (tgt_cell, val) in enumerate(zip(tgt_row.cells, values)):
-            # Preserve existing runs but clear text
+        # write into cells preserving font settings
+        for idx, (tgt_cell, val) in enumerate(zip(new_row.cells, values)):
             if tgt_cell.paragraphs:
                 p = tgt_cell.paragraphs[0]
-                p.clear()  # remove existing text but keep paragraph properties
-                run = p.add_run(str(val))
+                try:
+                    p.clear()  # remove existing text but keep paragraph properties
+                except Exception:
+                    for run in list(p.runs):
+                        run.text = ""
             else:
                 p = tgt_cell.add_paragraph()
-                run = p.add_run(str(val))
 
-            # Font settings
+            run = p.add_run(str(val))
+
             run.font.name = 'Times New Roman'
-            run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
+            try:
+                run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
+            except Exception:
+                pass
             run.font.size = Pt(9)
 
-            # Alignment
-            if idx != 0:  # center all columns except first
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            else:
-                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER if idx != 0 else WD_ALIGN_PARAGRAPH.LEFT
 
 def replace_placeholder_preserve_runs(paragraph, mapping: dict):
     """Replace placeholders in a paragraph while preserving run formatting."""
@@ -490,7 +505,7 @@ def save_docx_locally(template_path: str, output_path: str, mapping: dict, items
     if not asset_table:
         raise ValueError("Asset table not found")
 
-    insert_items_v03_force_font(asset_table, header_idx, items)
+    add_assets_preserve_formatting(asset_table, header_idx, items)
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     doc.save(output_path)
