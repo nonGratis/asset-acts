@@ -9,7 +9,7 @@ Generate formatted DOCX reports from Google Sheets using a local Word template
 ### 1. Clone & enter project
 
 ```bash
-git clone <this-repo-url>
+git clone https://github.com/nonGratis/asset-acts
 cd asset-acts
 ```
 
