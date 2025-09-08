@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import copy
+import logging
 
 from docx import Document
 from decimal import Decimal, ROUND_HALF_UP
@@ -61,33 +62,29 @@ TABLE_PLACEHOLDER_TOKEN = "%TABLE_PLACEHOLDER%"
 
 # ----------------------------------------------------------------
 
-LOG_DIR = "logs"
-os.makedirs(LOG_DIR, exist_ok=True)
-_logfile_path = os.path.join(LOG_DIR, f"asset_acts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
-_logfile = open(_logfile_path, "a", encoding="utf-8")
-
-
-def _write(level: str, msg: str) -> None:
-    line = f"{level.upper()}: {msg}"
-    print(line, flush=True)
-    _logfile.write(line + "\n")
-    _logfile.flush()
+# --- logging (terminal only) ---
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s: %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+_log = logging.getLogger(__name__)
 
 
 def info(msg: str) -> None:
-    _write("INFO", msg)
+    _log.info(msg)
 
 
 def warning(msg: str) -> None:
-    _write("WARNING", msg)
+    _log.warning(msg)
 
 
 def error(msg: str) -> None:
-    _write("ERROR", msg)
+    _log.error(msg)
 
 
 def summary(msg: str) -> None:
-    _write("SUMMARY", msg)
+    _log.info(msg)
 
 
 def check_constants() -> None:
@@ -692,13 +689,10 @@ def main():
 
     summary(f"rows_processed={stats['rows_processed']}, rows_skipped={stats['rows_skipped']}, owners_skipped={stats['owners_skipped']}, acts_generated={len(created)}, items_in_acts={stats['total_items_in_acts']}, total_value_generated={fmt_number(stats['total_value_generated'])}")
 
-    _logfile.close()
-
 
 if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
         error(f"Unhandled exception: {exc}")
-        _logfile.close()
         sys.exit(1)
