@@ -96,9 +96,8 @@ def check_constants() -> None:
         ("DEPARTMENTS_SPREADSHEET_ID", DEPARTMENTS_SPREADSHEET_ID),
         ("TEMPLATE_DOC_ID", TEMPLATE_DOC_ID),
     ):
-        if not value or value.startswith("FOLDER_ID_HERE") and keyname == "ASSETS_SPREADSHEET_ID":
-            # treat folder optional because local fallback exists
-            pass
+        if not value:
+            missing.append(f"Missing constant {keyname}")
     if missing:
         for m in missing:
             error(m)
@@ -608,40 +607,20 @@ def create_act_docs(drive_service, docs_service, per_owner: Dict[str, Any], use_
 
 
 def check_drive_permissions(drive_service) -> Tuple[bool, bool]:
-    # returns (drive_ok, use_local_fallback)
     try:
         drive_service.files().get(fileId=TEMPLATE_DOC_ID, fields="id").execute()
     except HttpError as e:
         error(f"Cannot access template doc {TEMPLATE_DOC_ID}: {e}")
-        # still allow local fallback if docs API is accessible; but if docs access fails later, script will error.
         return False, True
 
-    if not OUTPUT_FOLDER_ID or OUTPUT_FOLDER_ID.startswith("FOLDER_ID_HERE"):
+    if not OUTPUT_FOLDER_ID:
         warning("OUTPUT_FOLDER_ID not set; using local output only.")
         return False, True
 
     try:
         drive_service.files().get(fileId=OUTPUT_FOLDER_ID, fields="id").execute()
     except HttpError as e:
-        # detect storage quota exceeded
-        msg = str(e)
-        if "storageQuotaExceeded" in msg or "quota" in msg:
-            warning("Drive storage quota exceeded; will save output locally to output_docs/.")
-            return False, True
-        error(f"Cannot access output folder {OUTPUT_FOLDER_ID}: {e}")
-        return False, True
-
-    # test create & delete small file
-    test_body = {"name": "asset_acts_perm_test.tmp", "parents": [OUTPUT_FOLDER_ID], "mimeType": "application/vnd.google-apps.document"}
-    try:
-        created = drive_service.files().create(body=test_body, fields="id").execute()
-        drive_service.files().delete(fileId=created["id"]).execute()
-    except HttpError as e:
-        msg = str(e)
-        if "storageQuotaExceeded" in msg or "quota" in msg:
-            warning("Drive storage quota exceeded; will save output locally to output_docs/.")
-            return False, True
-        error(f"Service account cannot create files in output folder: {e}")
+        warning(f"Cannot access output folder {OUTPUT_FOLDER_ID}: {e}. Using local output.")
         return False, True
 
     info("Drive template and folder accessible.")
