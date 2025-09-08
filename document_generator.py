@@ -2,6 +2,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import copy
 
 from docx import Document
 from decimal import Decimal, ROUND_HALF_UP
@@ -13,6 +14,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from num2words import num2words
+from docx.oxml.ns import qn
 
 # ---------------------- CONSTANTS (edit) ----------------------
 SERVICE_ACCOUNT_KEYFILE = "asset-acts-233945d3280e.json"
@@ -117,7 +119,6 @@ def build_services():
     drive = build("drive", "v3", credentials=creds, cache_discovery=False)
     docs = build("docs", "v1", credentials=creds, cache_discovery=False)
     return sheets, drive, docs
-
 
 def ensure_file_is_spreadsheet(drive_service, file_id: str, label: str) -> None:
     """
@@ -396,79 +397,72 @@ def build_mapping_for_owner(data: Dict[str, Any], dept: Dict[str, str]) -> Dict[
 def safe_filename(name: str) -> str:
     return re.sub(r'[\\/*?:"<>|]', "_", name)
 
-
 def save_docx_locally(template_path: str, output_path: str, mapping: dict, items: list):
     doc = Document(template_path)
 
-    # --- Replace placeholders everywhere ---
-    def replace_in_text(text: str, mapping: dict) -> str:
-        for k, v in mapping.items():
-            text = text.replace(f"%{k}%", str(v))
-        return text
-
+    # Replace placeholders
     for p in doc.paragraphs:
-        for run in p.runs:
-            run.text = replace_in_text(run.text, mapping)
-
-    for table in doc.tables:
-        for row in table.rows:
+        for k, v in mapping.items():
+            tok = f"%{k}%"
+            if tok in p.text:
+                p.text = p.text.replace(tok, str(v))
+    for t in doc.tables:
+        for row in t.rows:
             for cell in row.cells:
-                cell.text = replace_in_text(cell.text, mapping)
+                for p in cell.paragraphs:
+                    for k, v in mapping.items():
+                        tok = f"%{k}%"
+                        if tok in p.text:
+                            p.text = p.text.replace(tok, str(v))
 
-    # --- Find the property table and header row ---
-    asset_table = None
-    header_row_idx = None
+    # Find asset table and header row
+    asset_table, header_idx = None, None
     for t in doc.tables:
         for i, row in enumerate(t.rows):
-            if any("Назва об’єкта" in c.text for c in row.cells):
-                asset_table = t
-                header_row_idx = i
+            if any("Назва об’єкта" in (c.text or "") for c in row.cells):
+                asset_table, header_idx = t, i
                 break
         if asset_table:
             break
-
     if not asset_table:
-        raise ValueError("Не знайдено таблицю з заголовком 'Назва об’єкта' у шаблоні")
+        raise ValueError("Asset table not found")
 
-    # --- Find the "Всього" row ---
-    total_row_idx = None
-    for i, row in enumerate(asset_table.rows):
-        if any("Всього" in c.text for c in row.cells):
-            total_row_idx = i
+    # --- Formatting row (row after header) ---
+    fmt_row = asset_table.rows[header_idx + 1] if header_idx + 1 < len(asset_table.rows) else asset_table.rows[header_idx]
+    fmt_tr = fmt_row._tr
+
+    # --- Find the last row before numbering row (if exists) ---
+    insert_after_tr = fmt_tr
+    for r in asset_table.rows[header_idx + 1:]:
+        first_cell_text = (r.cells[0].text or "").strip()
+        if first_cell_text == "1":  # numbering row
             break
-    if total_row_idx is None:
-        raise ValueError("Не знайдено рядок 'Всього' у таблиці")
+        insert_after_tr = r._tr
 
-    # --- Insert asset rows before "Всього" ---
-    insert_at = total_row_idx
+    # --- Insert items after insert_after_tr ---
+    cursor_tr = insert_after_tr
     for it in items:
-        # normalize all fields into strings
-        name = str(it.get("name", ""))
-        inv = str(it.get("inventory", ""))
-        unit = str(it.get("unit", ""))
-        qty = str(int(it.get("qty", 0)))  # ensure integer
-        unit_price = fmt_number(it["unit_price"]) if isinstance(it["unit_price"], Decimal) else str(it["unit_price"])
-        total_sum = fmt_number(it["sum"]) if isinstance(it["sum"], Decimal) else str(it["sum"])
-        note = str(it.get("note", ""))
+        clone = copy.deepcopy(fmt_tr)
+        cursor_tr.addnext(clone)
+        cursor_tr = clone
+        tgt_row = asset_table.rows[[r._tr for r in asset_table.rows].index(clone)]
+        values = [
+            str(it.get("name", "")),
+            str(it.get("inventory", "")),
+            str(it.get("unit", "")),
+            str(int(it.get("qty", 0))),
+            str(it.get("unit_price", "")),
+            str(it.get("sum", "")),
+            str(it.get("note", "")),
+        ]
+        for tgt_cell, val in zip(tgt_row.cells, values):
+            if tgt_cell.paragraphs:
+                tgt_cell.paragraphs[0].text = val
+            else:
+                tgt_cell.add_paragraph(val)
 
-        new_row = asset_table.add_row()
-        asset_table._tbl.remove(new_row._tr)
-        asset_table._tbl.insert(insert_at, new_row._tr)
-
-        row = asset_table.rows[insert_at].cells
-        row[0].text = name
-        row[1].text = inv
-        row[2].text = unit
-        row[3].text = qty
-        row[4].text = unit_price
-        row[5].text = total_sum
-        row[6].text = note
-        insert_at += 1
-
-    # --- Save final doc ---
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     doc.save(output_path)
-
 
 def create_act_docs(drive_service, docs_service, per_owner: Dict[str, Any], use_local_fallback: bool) -> List[Dict[str, Any]]:
     created = []
