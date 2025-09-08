@@ -25,7 +25,7 @@ ASSETS_SHEET_NAME = "list"
 DEPARTMENTS_SPREADSHEET_ID = "1N45PcHU-YgpcYEyXDbQRCG94I-BWbrultIyqRr5Z4N8"
 DEPARTMENTS_SHEET_NAME = "Department"
 
-OUTPUT_LOCAL_DIR = "output_docs"
+OUTPUT_LOCAL_DIR_DOC = "docs"
 
 # Columns (1-based)
 COL_ID = 1
@@ -524,7 +524,7 @@ def create_act_docs_local(per_owner: Dict[str, Any]) -> List[Dict[str, Any]]:
         mapping = build_mapping_for_owner(data, dept)
 
         try:
-            out_path = os.path.join(OUTPUT_LOCAL_DIR, f"{safe_filename(file_name)}.docx")
+            out_path = os.path.join(OUTPUT_LOCAL_DIR_DOC, f"{safe_filename(file_name)}.docx")
             save_docx_locally(
                 template_path="template.docx",
                 output_path=out_path,
