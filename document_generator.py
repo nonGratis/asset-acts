@@ -418,7 +418,6 @@ def set_cell_text_with_font(cell, text, font_name="Times New Roman", font_size=1
 
 
 def insert_items_v03_force_font(asset_table, header_idx, items):
-
     fmt_row = asset_table.rows[header_idx + 1] if header_idx + 1 < len(asset_table.rows) else asset_table.rows[header_idx]
     fmt_tr = fmt_row._tr
 
@@ -437,13 +436,16 @@ def insert_items_v03_force_font(asset_table, header_idx, items):
         cursor_tr = clone
         tgt_row = asset_table.rows[[r._tr for r in asset_table.rows].index(clone)]
 
+        unit_price_formatted = fmt_number(it.get("unit_price", Decimal("0.00"))) if it.get("unit_price") is not None else ""
+        sum_formatted = fmt_number(it.get("sum", Decimal("0.00"))) if it.get("sum") is not None else ""
+
         values = [
             str(it.get("name", "")),
             str(it.get("inventory", "")),
             str(it.get("unit", "")),
             str(int(it.get("qty", 0))),
-            str(it.get("unit_price", "")),
-            str(it.get("sum", "")),
+            unit_price_formatted,
+            sum_formatted,
             str(it.get("note", "")),
         ]
 
@@ -452,10 +454,10 @@ def insert_items_v03_force_font(asset_table, header_idx, items):
             if tgt_cell.paragraphs:
                 p = tgt_cell.paragraphs[0]
                 p.clear()  # remove existing text but keep paragraph properties
-                run = p.add_run(val)
+                run = p.add_run(str(val))
             else:
                 p = tgt_cell.add_paragraph()
-                run = p.add_run(val)
+                run = p.add_run(str(val))
 
             # Font settings
             run.font.name = 'Times New Roman'
@@ -467,7 +469,6 @@ def insert_items_v03_force_font(asset_table, header_idx, items):
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             else:
                 p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-
 
 def replace_placeholder_preserve_runs(paragraph, mapping: dict):
     """Replace placeholders in a paragraph while preserving run formatting."""
