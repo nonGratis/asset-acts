@@ -1,4 +1,3 @@
-from __future__ import annotations
 import os
 import re
 import sys
@@ -7,7 +6,6 @@ import logging
 
 from docx import Document
 from decimal import Decimal, ROUND_HALF_UP
-from datetime import datetime
 from typing import List, Dict, Any, Tuple
 
 from google.oauth2 import service_account
@@ -19,7 +17,6 @@ from docx.oxml.ns import qn
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-# ---------------------- CONSTANTS (edit) ----------------------
 SERVICE_ACCOUNT_KEYFILE = "asset-acts-15fc23ac9cd4.json"
 
 ASSETS_SPREADSHEET_ID = "1XbJuTGtwiQNFzxqOM5F1ehOE5PRmd1GFzi2HFmZnoWE"
@@ -57,32 +54,12 @@ CURRENCY_SUFFIX = ""
 ALLOW_ROUNDING_ADJUST = True
 TABLE_PLACEHOLDER_TOKEN = "%TABLE_PLACEHOLDER%"
 
-# ----------------------------------------------------------------
-
-# --- logging (terminal only) ---
 logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)s: %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
-_log = logging.getLogger(__name__)
-
-
-def info(msg: str) -> None:
-    _log.info(msg)
-
-
-def warning(msg: str) -> None:
-    _log.warning(msg)
-
-
-def error(msg: str) -> None:
-    _log.error(msg)
-
-
-def summary(msg: str) -> None:
-    _log.info(msg)
-
+log = logging.getLogger(__name__)
 
 def check_constants() -> None:
     missing = []
@@ -96,7 +73,7 @@ def check_constants() -> None:
             missing.append(f"Missing constant {keyname}")
     if missing:
         for m in missing:
-            error(m)
+            log.error(m)
         raise SystemExit("Missing critical constants; aborting.")
 
 
@@ -122,13 +99,13 @@ def ensure_file_is_spreadsheet(drive_service, file_id: str, label: str) -> None:
     try:
         meta = drive_service.files().get(fileId=file_id, fields="id, name, mimeType").execute()
     except HttpError as e:
-        error(f"Cannot fetch {label} (id={file_id}): {e}")
+        log.error(f"Cannot fetch {label} (id={file_id}): {e}")
         raise SystemExit(1)
     mime = meta.get("mimeType", "")
     if mime != "application/vnd.google-apps.spreadsheet":
-        error(f"{label} (id={file_id}) is not a Google Spreadsheet (mimeType={mime}). Please provide the correct spreadsheet ID.")
+        log.error(f"{label} (id={file_id}) is not a Google Spreadsheet (mimeType={mime}). Please provide the correct spreadsheet ID.")
         raise SystemExit(1)
-    info(f"{label} found: {meta.get('name', '<untitled>')} (id={file_id})")
+    log.info(f"{label} found: {meta.get('name', '<untitled>')} (id={file_id})")
 
 
 def safe_get(row: list, col: int, default=""):
@@ -150,13 +127,19 @@ def safe_get(row: list, col: int, default=""):
 
 def parse_number(s) -> Decimal:
     if s is None:
+        log.error("Empty numeric")
         raise ValueError("Empty numeric")
     st = str(s).strip()
     st = st.replace("\xa0", "").replace(" ", "")
     st = st.replace(",", ".")
     if st == "":
+        log.error("Empty numeric")
         raise ValueError("Empty numeric")
-    return Decimal(st)
+    try:
+        return Decimal(st)
+    except Exception as e:
+        log.error("Invalid numeric '%s': %s", s, e)
+        raise
 
 
 def quantize_money(d: Decimal) -> Decimal:
@@ -189,9 +172,9 @@ def read_sheet_values(sheets_service, spreadsheet_id: str, sheet_name: str):
     except HttpError as e:
         msg = str(e)
         if "This operation is not supported for this document" in msg or "not supported for this document" in msg:
-            error(f"Sheets API: file id {spreadsheet_id} is not a spreadsheet or not supported by Sheets API. Check that the ID points to a Google Sheet and the service account has access.")
+            log.error(f"Sheets API: file id {spreadsheet_id} is not a spreadsheet or not supported by Sheets API. Check that the ID points to a Google Sheet and the service account has access.")
             raise SystemExit(1)
-        error(f"Sheets API error for spreadsheet={spreadsheet_id}, range={rng}: {e}")
+        log.error(f"Sheets API error for spreadsheet={spreadsheet_id}, range={rng}: {e}")
         raise
 
 
@@ -199,12 +182,12 @@ def load_departments(sheets_service) -> Dict[str, Dict[str, str]]:
     vals = read_sheet_values(sheets_service, DEPARTMENTS_SPREADSHEET_ID, DEPARTMENTS_SHEET_NAME)
     depts = {}
     if not vals or len(vals) < 2:
-        warning("Departments sheet empty or missing rows.")
+        log.warning("Departments sheet empty or missing rows.")
         return depts
     for i, row in enumerate(vals[1:], start=2):
         code = str(safe_get(row, DEPT_COL_CODE, "")).strip()
         if not code:
-            warning(f"Departments row {i} missing code; skipping.")
+            log.warning(f"Departments row {i} missing code; skipping.")
             continue
         key = normalize_code(code)
         depts[key] = {
@@ -229,7 +212,7 @@ def parse_owner_token(tok: str) -> Tuple[str, int, bool]:
 def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
     vals = read_sheet_values(sheets_service, ASSETS_SPREADSHEET_ID, ASSETS_SHEET_NAME)
     if not vals or len(vals) < 2:
-        info("No assets rows found.")
+        log.info("No assets rows found.")
         return {}, {"rows_processed": 0, "rows_skipped": 0, "owners_skipped": 0, "total_items_in_acts": 0, "total_value_generated": Decimal("0.00")}
 
     rows_processed = 0
@@ -257,7 +240,7 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
             owners_raw = safe_get(row, COL_OWNERS, "")
 
             if not name:
-                warning(f"Row {rindex} missing name; skipping.")
+                log.warning(f"Row {rindex} missing name; skipping.")
                 rows_skipped += 1
                 continue
 
@@ -265,19 +248,19 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
             price = parse_number(price_raw)
 
             if qty <= 0:
-                error(f"Row {rindex} has non-positive quantity {qty}; skip row.")
+                log.error(f"Row {rindex} has non-positive quantity {qty}; skip row.")
                 rows_skipped += 1
                 continue
 
             unit_price = quantize_money(price / Decimal(qty))
         except Exception as e:
-            error(f"Row {rindex} parse error: {e}; skipping row.")
+            log.error(f"Row {rindex} parse error: {e}; skipping row.")
             rows_skipped += 1
             continue
 
         tokens = [t.strip() for t in str(owners_raw).split(",") if t.strip()]
         if not tokens:
-            error(f"Row {rindex} no owners; skip.")
+            log.error(f"Row {rindex} no owners; skip.")
             rows_skipped += 1
             continue
 
@@ -291,17 +274,17 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
 
         if any_explicit:
             if not all(t[2] for t in token_infos):
-                error(f"Row {rindex} mixed explicit and implicit owners; skip.")
+                log.error(f"Row {rindex} mixed explicit and implicit owners; skip.")
                 rows_skipped += 1
                 continue
             total_spec = sum(t[1] for t in token_infos)
             if total_spec != qty:
-                error(f"Row {rindex} owner counts sum {total_spec} != quantity {qty}; skip.")
+                log.error(f"Row {rindex} owner counts sum {total_spec} != quantity {qty}; skip.")
                 rows_skipped += 1
                 continue
         else:
             if len(token_infos) != 1:
-                error(f"Row {rindex} ambiguous multiple owners without counts; skip.")
+                log.error(f"Row {rindex} ambiguous multiple owners without counts; skip.")
                 rows_skipped += 1
                 continue
             base = token_infos[0][0]
@@ -312,13 +295,13 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
             key = normalize_code(base)
             dept = departments.get(key)
             if not dept:
-                error(f"Row {rindex} owner '{base}' not found; skipping this owner entry.")
+                log.error(f"Row {rindex} owner '{base}' not found; skipping this owner entry.")
                 owners_skipped += 1
                 continue
             owners_for_row.append((key, int(num), dept))
 
         if not owners_for_row:
-            info(f"Row {rindex}: all owners skipped; skipping row.")
+            log.info(f"Row {rindex}: all owners skipped; skipping row.")
             rows_skipped += 1
             continue
 
@@ -331,9 +314,9 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
             diff = price_q - sum_owner_sums
             if ALLOW_ROUNDING_ADJUST:
                 owner_sums[-1] = quantize_money(owner_sums[-1] + diff)
-                warning(f"Row {rindex} rounding adjusted by {diff} on last owner.")
+                log.warning(f"Row {rindex} rounding adjusted by {diff} on last owner.")
             else:
-                warning(f"Row {rindex} rounding mismatch {price_q - sum_owner_sums}; continuing.")
+                log.warning(f"Row {rindex} rounding mismatch {price_q - sum_owner_sums}; continuing.")
 
         for (key, oqty, dept), osum in zip(owners_for_row, owner_sums):
             if key not in per_owner:
@@ -521,7 +504,7 @@ def create_act_docs_local(per_owner: Dict[str, Any]) -> List[Dict[str, Any]]:
     created = []
     for code, data in per_owner.items():
         if not data["items"]:
-            info(f"Owner {code} has no items; skipping.")
+            log.info(f"Owner {code} has no items; skipping.")
             continue
 
         dept = data["dept"]
@@ -536,7 +519,7 @@ def create_act_docs_local(per_owner: Dict[str, Any]) -> List[Dict[str, Any]]:
                 mapping=mapping,
                 items=data["items"],
             )
-            info(f'Created local doc "{out_path}" - items={len(data["items"])} - sum={fmt_number(data["tot_sum"]) }')
+            log.info(f'Created local doc "{out_path}" - items={len(data["items"])} - sum={fmt_number(data["tot_sum"]) }')
             created.append({
                 "local_path": out_path,
                 "name": file_name,
@@ -544,7 +527,7 @@ def create_act_docs_local(per_owner: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "sum": data["tot_sum"],
             })
         except Exception as e:
-            error(f"Local save failed for {code}: {e}")
+            log.error(f"Local save failed for {code}: {e}")
             continue
 
     return created
@@ -560,22 +543,22 @@ def main():
     except SystemExit:
         raise
 
-    info(f"Start processing assets spreadsheet (ID={ASSETS_SPREADSHEET_ID})")
+    log.info(f"Start processing assets spreadsheet (ID={ASSETS_SPREADSHEET_ID})")
     departments = load_departments(sheets_svc)
     per_owner, stats = parse_assets(sheets_svc, departments)
 
     if not per_owner:
-        summary("No valid owners/items found; nothing to generate.")
+        log.info("No valid owners/items found; nothing to generate.")
         return
 
     created = create_act_docs_local(per_owner)
 
-    summary(f"rows_processed={stats['rows_processed']}, rows_skipped={stats['rows_skipped']}, owners_skipped={stats['owners_skipped']}, acts_generated={len(created)}, items_in_acts={stats['total_items_in_acts']}, total_value_generated={fmt_number(stats['total_value_generated'])}")
+    log.info(f"rows_processed={stats['rows_processed']}, rows_skipped={stats['rows_skipped']}, owners_skipped={stats['owners_skipped']}, acts_generated={len(created)}, items_in_acts={stats['total_items_in_acts']}, total_value_generated={fmt_number(stats['total_value_generated'])}")
 
 
 if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        error(f"Unhandled exception: {exc}")
+        log.error(f"Unhandled exception: {exc}")
         sys.exit(1)
