@@ -131,7 +131,24 @@ def ensure_file_is_spreadsheet(drive_service, file_id: str, label: str) -> None:
     info(f"{label} found: {meta.get('name', '<untitled>')} (id={file_id})")
 
 
-def parse_number(s: str) -> Decimal:
+def safe_get(row: list, col: int, default=""):
+    """Return 1-based column from row safely.
+
+    row: list of cell values as returned by Sheets API
+    col: 1-based column index
+    """
+    if row is None:
+        return default
+    idx = col - 1
+    if idx < 0:
+        return default
+    if idx >= len(row):
+        return default
+    val = row[idx]
+    return val if val is not None else default
+
+
+def parse_number(s) -> Decimal:
     if s is None:
         raise ValueError("Empty numeric")
     st = str(s).strip()
@@ -181,19 +198,19 @@ def load_departments(sheets_service) -> Dict[str, Dict[str, str]]:
         warning("Departments sheet empty or missing rows.")
         return depts
     for i, row in enumerate(vals[1:], start=2):
-        code = (row[DEPT_COL_CODE - 1] if len(row) >= DEPT_COL_CODE else "").strip()
+        code = str(safe_get(row, DEPT_COL_CODE, "")).strip()
         if not code:
             warning(f"Departments row {i} missing code; skipping.")
             continue
         key = normalize_code(code)
         depts[key] = {
-            "code": row[DEPT_COL_CODE - 1] if len(row) >= DEPT_COL_CODE else "",
-            "type": row[DEPT_COL_TYPE - 1] if len(row) >= DEPT_COL_TYPE else "",
-            "status": row[DEPT_COL_STATUS - 1] if len(row) >= DEPT_COL_STATUS else "",
-            "position": row[DEPT_COL_POSITION - 1] if len(row) >= DEPT_COL_POSITION else "",
-            "fullname": row[DEPT_COL_FULLNAME - 1] if len(row) >= DEPT_COL_FULLNAME else "",
-            "normalized": row[DEPT_COL_NORMALIZED - 1] if len(row) >= DEPT_COL_NORMALIZED else "",
-        }        
+            "code": safe_get(row, DEPT_COL_CODE, ""),
+            "type": safe_get(row, DEPT_COL_TYPE, ""),
+            "status": safe_get(row, DEPT_COL_STATUS, ""),
+            "position": safe_get(row, DEPT_COL_POSITION, ""),
+            "fullname": safe_get(row, DEPT_COL_FULLNAME, ""),
+            "normalized": safe_get(row, DEPT_COL_NORMALIZED, ""),
+        }
     return depts
 
 
@@ -219,25 +236,30 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
     total_value_generated = Decimal("0.00")
 
     for rindex, row in enumerate(vals[1:], start=2):
-        if not any(cell.strip() for cell in row if isinstance(cell, str)):
+        if not any(str(cell).strip() for cell in row):
             continue
-        gen_flag = row[COL_GENERATE_FLAG - 1] if len(row) >= COL_GENERATE_FLAG else ""
+
+        gen_flag = safe_get(row, COL_GENERATE_FLAG, "")
         if not is_true_flag(gen_flag):
             rows_skipped += 1
             continue
+
         try:
-            name = row[COL_NAME - 1] if len(row) >= COL_NAME else ""
-            invnum = row[COL_INVENTORY_NUMBER - 1] if len(row) >= COL_INVENTORY_NUMBER else ""
-            unit = row[COL_UNIT - 1] if len(row) >= COL_UNIT else ""
-            qty_raw = row[COL_QUANTITY - 1] if len(row) >= COL_QUANTITY else ""
-            price_raw = row[COL_PRICE - 1] if len(row) >= COL_PRICE else ""
-            owners_raw = row[COL_OWNERS - 1] if len(row) >= COL_OWNERS else ""
+            name = safe_get(row, COL_NAME, "")
+            invnum = safe_get(row, COL_INVENTORY_NUMBER, "")
+            unit = safe_get(row, COL_UNIT, "")
+            qty_raw = safe_get(row, COL_QUANTITY, "")
+            price_raw = safe_get(row, COL_PRICE, "")
+            owners_raw = safe_get(row, COL_OWNERS, "")
+
             if not name:
                 warning(f"Row {rindex} missing name; skipping.")
                 rows_skipped += 1
                 continue
+
             qty = int(parse_number(qty_raw))
             price = parse_number(price_raw)
+
             if qty <= 0:
                 error(f"Row {rindex} has non-positive quantity {qty}; skip row.")
                 rows_skipped += 1
