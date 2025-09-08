@@ -17,7 +17,7 @@ from docx.oxml.ns import qn
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-SERVICE_ACCOUNT_KEYFILE = "asset-acts-15fc23ac9cd4.json"
+SERVICE_ACCOUNT_KEYFILE = "credentials.json"
 
 ASSETS_SPREADSHEET_ID = "1XbJuTGtwiQNFzxqOM5F1ehOE5PRmd1GFzi2HFmZnoWE"
 ASSETS_SHEET_NAME = "list"
