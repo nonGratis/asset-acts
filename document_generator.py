@@ -159,8 +159,12 @@ def parse_number(s) -> Decimal:
     return Decimal(st)
 
 
+def quantize_money(d: Decimal) -> Decimal:
+    return d.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
 def fmt_number(val: Decimal) -> str:
-    q = val.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    q = quantize_money(Decimal(val))
     s = f"{q:,.2f}"
     s = s.replace(",", "TEMP_THOUS").replace(".", "TEMP_DEC")
     s = s.replace("TEMP_THOUS", THOUSAND_SEPARATOR).replace("TEMP_DEC", DECIMAL_SEPARATOR)
@@ -264,7 +268,8 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
                 error(f"Row {rindex} has non-positive quantity {qty}; skip row.")
                 rows_skipped += 1
                 continue
-            unit_price = (price / Decimal(qty)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+            unit_price = quantize_money(price / Decimal(qty))
         except Exception as e:
             error(f"Row {rindex} parse error: {e}; skipping row.")
             rows_skipped += 1
@@ -319,13 +324,13 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
 
         owner_sums = []
         for (_, oqty, _) in owners_for_row:
-            owner_sums.append((unit_price * Decimal(oqty)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+            owner_sums.append(quantize_money(unit_price * Decimal(oqty)))
         sum_owner_sums = sum(owner_sums)
-        price_q = price.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        price_q = quantize_money(price)
         if sum_owner_sums != price_q:
             diff = price_q - sum_owner_sums
             if ALLOW_ROUNDING_ADJUST:
-                owner_sums[-1] = (owner_sums[-1] + diff).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                owner_sums[-1] = quantize_money(owner_sums[-1] + diff)
                 warning(f"Row {rindex} rounding adjusted by {diff} on last owner.")
             else:
                 warning(f"Row {rindex} rounding mismatch {price_q - sum_owner_sums}; continuing.")
@@ -384,7 +389,7 @@ def money_to_words(amount: Decimal, lang: str = "uk") -> str:
     Examples:
         Decimal('55494.00') -> "п’ятдесят п’ять тисяч чотириста дев’яносто чотири грн. 00 коп."
     """
-    q = amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    q = quantize_money(amount)
     total_kop = int((q * 100).to_integral_value(rounding=ROUND_HALF_UP))
     hryv = total_kop // 100
     kop = total_kop % 100
