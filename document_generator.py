@@ -15,9 +15,11 @@ from googleapiclient.errors import HttpError
 
 from num2words import num2words
 from docx.oxml.ns import qn
+from docx.shared import Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 # ---------------------- CONSTANTS (edit) ----------------------
-SERVICE_ACCOUNT_KEYFILE = "asset-acts-233945d3280e.json"
+SERVICE_ACCOUNT_KEYFILE = "asset-acts-15fc23ac9cd4.json"
 
 ASSETS_SPREADSHEET_ID = "1XbJuTGtwiQNFzxqOM5F1ehOE5PRmd1GFzi2HFmZnoWE"
 ASSETS_SHEET_NAME = "list"
@@ -397,25 +399,103 @@ def build_mapping_for_owner(data: Dict[str, Any], dept: Dict[str, str]) -> Dict[
 def safe_filename(name: str) -> str:
     return re.sub(r'[\\/*?:"<>|]', "_", name)
 
+
+
+def clone_row_preserve_fonts(row):
+    """Deep-copy a table row preserving run fonts (v03_force_font_run)."""
+    new_row = copy.deepcopy(row._tr)
+    return new_row
+
+def set_cell_text_with_font(cell, text, font_name="Times New Roman", font_size=12):
+    """Replace cell text while preserving font."""
+    cell.text = ""
+    p = cell.add_paragraph()
+    run = p.add_run(str(text))
+    run.font.name = font_name
+    run._element.rPr.rFonts.set(qn("w:ascii"), font_name)
+    run._element.rPr.rFonts.set(qn("w:hAnsi"), font_name)
+    run.font.size = Pt(font_size)
+
+
+def insert_items_v03_force_font(asset_table, header_idx, items):
+
+    fmt_row = asset_table.rows[header_idx + 1] if header_idx + 1 < len(asset_table.rows) else asset_table.rows[header_idx]
+    fmt_tr = fmt_row._tr
+
+    # Determine insertion point (last row before numbering row)
+    insert_after_tr = fmt_tr
+    for r in asset_table.rows[header_idx + 1:]:
+        first_cell_text = (r.cells[0].text or "").strip()
+        if first_cell_text == "1":  # numbering row
+            break
+        insert_after_tr = r._tr
+
+    cursor_tr = insert_after_tr
+    for it in items:
+        clone = copy.deepcopy(fmt_tr)
+        cursor_tr.addnext(clone)
+        cursor_tr = clone
+        tgt_row = asset_table.rows[[r._tr for r in asset_table.rows].index(clone)]
+
+        values = [
+            str(it.get("name", "")),
+            str(it.get("inventory", "")),
+            str(it.get("unit", "")),
+            str(int(it.get("qty", 0))),
+            str(it.get("unit_price", "")),
+            str(it.get("sum", "")),
+            str(it.get("note", "")),
+        ]
+
+        for idx, (tgt_cell, val) in enumerate(zip(tgt_row.cells, values)):
+            # Preserve existing runs but clear text
+            if tgt_cell.paragraphs:
+                p = tgt_cell.paragraphs[0]
+                p.clear()  # remove existing text but keep paragraph properties
+                run = p.add_run(val)
+            else:
+                p = tgt_cell.add_paragraph()
+                run = p.add_run(val)
+
+            # Font settings
+            run.font.name = 'Times New Roman'
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
+            run.font.size = Pt(9)
+
+            # Alignment
+            if idx != 0:  # center all columns except first
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            else:
+                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+
+def replace_placeholder_preserve_runs(paragraph, mapping: dict):
+    """Replace placeholders in a paragraph while preserving run formatting."""
+    for k, v in mapping.items():
+        placeholder = f"%{k}%"
+        # Iterate over runs carefully
+        for run in paragraph.runs:
+            if placeholder in run.text:
+                run.text = run.text.replace(placeholder, str(v))
+
+def replace_placeholders_doc(doc: Document, mapping: dict):
+    """Replace all placeholders in the document while preserving formatting."""
+    # Paragraphs
+    for p in doc.paragraphs:
+        replace_placeholder_preserve_runs(p, mapping)
+    
+    # Tables
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    replace_placeholder_preserve_runs(p, mapping)
+
 def save_docx_locally(template_path: str, output_path: str, mapping: dict, items: list):
     doc = Document(template_path)
 
-    # Replace placeholders
-    for p in doc.paragraphs:
-        for k, v in mapping.items():
-            tok = f"%{k}%"
-            if tok in p.text:
-                p.text = p.text.replace(tok, str(v))
-    for t in doc.tables:
-        for row in t.rows:
-            for cell in row.cells:
-                for p in cell.paragraphs:
-                    for k, v in mapping.items():
-                        tok = f"%{k}%"
-                        if tok in p.text:
-                            p.text = p.text.replace(tok, str(v))
+    replace_placeholders_doc(doc, mapping)
 
-    # Find asset table and header row
     asset_table, header_idx = None, None
     for t in doc.tables:
         for i, row in enumerate(t.rows):
@@ -427,39 +507,7 @@ def save_docx_locally(template_path: str, output_path: str, mapping: dict, items
     if not asset_table:
         raise ValueError("Asset table not found")
 
-    # --- Formatting row (row after header) ---
-    fmt_row = asset_table.rows[header_idx + 1] if header_idx + 1 < len(asset_table.rows) else asset_table.rows[header_idx]
-    fmt_tr = fmt_row._tr
-
-    # --- Find the last row before numbering row (if exists) ---
-    insert_after_tr = fmt_tr
-    for r in asset_table.rows[header_idx + 1:]:
-        first_cell_text = (r.cells[0].text or "").strip()
-        if first_cell_text == "1":  # numbering row
-            break
-        insert_after_tr = r._tr
-
-    # --- Insert items after insert_after_tr ---
-    cursor_tr = insert_after_tr
-    for it in items:
-        clone = copy.deepcopy(fmt_tr)
-        cursor_tr.addnext(clone)
-        cursor_tr = clone
-        tgt_row = asset_table.rows[[r._tr for r in asset_table.rows].index(clone)]
-        values = [
-            str(it.get("name", "")),
-            str(it.get("inventory", "")),
-            str(it.get("unit", "")),
-            str(int(it.get("qty", 0))),
-            str(it.get("unit_price", "")),
-            str(it.get("sum", "")),
-            str(it.get("note", "")),
-        ]
-        for tgt_cell, val in zip(tgt_row.cells, values):
-            if tgt_cell.paragraphs:
-                tgt_cell.paragraphs[0].text = val
-            else:
-                tgt_cell.add_paragraph(val)
+    insert_items_v03_force_font(asset_table, header_idx, items)
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     doc.save(output_path)
