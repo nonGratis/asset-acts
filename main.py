@@ -347,9 +347,8 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
 # ---------------------- Helpers: numbers & money -> words ----------------------
 
 def _normalize_apostrophe(s: str) -> str:
-    # prefer typographic apostrophe used in Ukrainian texts
-    return s.replace("'", "’")
-
+    # prefer Ukrainian typographic apostrophe
+    return (s or "").replace("'", "’")
 
 def int_to_words(n: int, lang: str = "uk") -> str:
     """Return cardinal words for integer `n` in specified language."""
