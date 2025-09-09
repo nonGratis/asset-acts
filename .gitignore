@@ -81,5 +81,5 @@ nosetests.xml
 *.swp
 
 # Output documents
-output_docs/
 *.docx
+*.pdf

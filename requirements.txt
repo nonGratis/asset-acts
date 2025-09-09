@@ -10,6 +10,9 @@ gspread>=5.9.0
 # DOCX manipulation
 python-docx>=0.8.11
 
+# PDF export
+docx2pdf
+
 # Numbers to words
 num2words>=0.5.12
 
