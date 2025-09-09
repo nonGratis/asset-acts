@@ -346,10 +346,6 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
 
 # ---------------------- Helpers: numbers & money -> words ----------------------
 
-def _normalize_apostrophe(s: str) -> str:
-    # prefer Ukrainian typographic apostrophe
-    return (s or "").replace("'", "’")
-
 def money_to_words(amount: Decimal, lang: str = "uk") -> str:
     q = quantize_money(amount)
     total_kop = int((q * 100).to_integral_value(rounding=ROUND_HALF_UP))
