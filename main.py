@@ -151,12 +151,6 @@ def fmt_number(val: Decimal) -> str:
     return s + (CURRENCY_SUFFIX or "")
 
 
-def is_true_flag(s: str) -> bool:
-    if s is None:
-        return False
-    return str(s).strip().lower() in ("true", "1", "yes", "y", "так")
-
-
 def normalize_code(token: str) -> str:
     return re.sub(r"\s+", "", token).upper()
 
@@ -224,7 +218,7 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
             continue
 
         gen_flag = safe_get(row, COL_GENERATE_FLAG, "")
-        if not is_true_flag(gen_flag):
+        if str(gen_flag).strip().upper() != "TRUE":
             rows_skipped += 1
             continue
 
