@@ -350,29 +350,12 @@ def _normalize_apostrophe(s: str) -> str:
     # prefer Ukrainian typographic apostrophe
     return (s or "").replace("'", "’")
 
-def int_to_words(n: int, lang: str = "uk") -> str:
-    """Return cardinal words for integer `n` in specified language."""
-    try:
-        if n == 0:
-            return _normalize_apostrophe(num2words(0, lang=lang))
-        w = num2words(n, lang=lang)
-        return _normalize_apostrophe(w)
-    except Exception:
-        # fallback to str
-        return str(n)
-
-
 def money_to_words(amount: Decimal, lang: str = "uk") -> str:
-    """Convert Decimal amount -> Ukrainian words with `грн.` and `коп.`
-
-    Examples:
-        Decimal('55494.00') -> "п’ятдесят п’ять тисяч чотириста дев’яносто чотири грн. 00 коп."
-    """
     q = quantize_money(amount)
     total_kop = int((q * 100).to_integral_value(rounding=ROUND_HALF_UP))
     hryv = total_kop // 100
     kop = total_kop % 100
-    hryv_words = int_to_words(hryv, lang=lang)
+    hryv_words = num2words(hryv, lang=lang)
     # Ensure two-digit fractional part
     return f"{hryv_words} грн. {kop:02d} коп."
 
@@ -383,7 +366,7 @@ def build_mapping_for_owner(data: Dict[str, Any], dept: Dict[str, str]) -> Dict[
     tot_sum = data.get("tot_sum", Decimal('0.00'))
 
     mapping = {
-        "TotalQuantityWords": int_to_words(tot_qty, lang='uk'),
+        "TotalQuantityWords": num2words(tot_qty, lang='uk'),
         "TotalQuantityNumeric": str(tot_qty),
         "TotalSumNumeric": fmt_number(tot_sum),
         "TotalSumWords": money_to_words(tot_sum, lang='uk'),
