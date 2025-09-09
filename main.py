@@ -16,6 +16,7 @@ from num2words import num2words
 from docx.oxml.ns import qn
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx2pdf import convert as docx2pdf_convert
 
 SERVICE_ACCOUNT_KEYFILE = "credentials.json"
 
@@ -26,6 +27,7 @@ DEPARTMENTS_SPREADSHEET_ID = "1N45PcHU-YgpcYEyXDbQRCG94I-BWbrultIyqRr5Z4N8"
 DEPARTMENTS_SHEET_NAME = "Department"
 
 OUTPUT_LOCAL_DIR_DOC = "docs"
+OUTPUT_LOCAL_DIR_PDF = "pdfs"
 
 # Columns (1-based)
 COL_ID = 1
@@ -479,10 +481,27 @@ def save_docx_locally(template_path: str, output_path: str, mapping: dict, items
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     doc.save(output_path)
 
+def convert_to_pdf(docx_path: str) -> str:
+    """Convert DOCX to PDF. Returns PDF path on success."""
+
+    pdf_path = docx_path.replace(".docx", ".pdf")
+    pdf_dir = os.path.dirname(pdf_path).replace(OUTPUT_LOCAL_DIR_DOC, OUTPUT_LOCAL_DIR_PDF)
+    pdf_path = os.path.join(pdf_dir, os.path.basename(pdf_path))
+    
+    os.makedirs(pdf_dir, exist_ok=True)
+    
+    try:
+        docx2pdf_convert(docx_path, pdf_path)
+        return pdf_path
+    except Exception as e:
+        raise RuntimeError(f"PDF conversion failed: {e}")
 
 def create_act_docs_local(per_owner: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Save all documents locally"""
     created = []
+    pdf_created = []
+    pdf_failed = []
+    
     for code, data in per_owner.items():
         if not data["items"]:
             log.info(f"Owner {code} has no items; skipping.")
@@ -493,23 +512,41 @@ def create_act_docs_local(per_owner: Dict[str, Any]) -> List[Dict[str, Any]]:
         mapping = build_mapping_for_owner(data, dept)
 
         try:
-            out_path = os.path.join(OUTPUT_LOCAL_DIR_DOC, f"{safe_filename(file_name)}.docx")
+            # Create DOCX
+            docx_path = os.path.join(OUTPUT_LOCAL_DIR_DOC, f"{safe_filename(file_name)}.docx")
             save_docx_locally(
                 template_path="template.docx",
-                output_path=out_path,
+                output_path=docx_path,
                 mapping=mapping,
                 items=data["items"],
             )
-            log.info(f'Created local doc "{out_path}" - items={len(data["items"])} - sum={fmt_number(data["tot_sum"]) }')
-            created.append({
-                "local_path": out_path,
+            
+            doc_info = {
+                "docx_path": docx_path,
                 "name": file_name,
                 "items": len(data["items"]),
                 "sum": data["tot_sum"],
-            })
+            }
+            
+            # Create PDF
+            try:
+                pdf_path = convert_to_pdf(docx_path)
+                doc_info["pdf_path"] = pdf_path
+                pdf_created.append(code)
+                log.info(f'Created docs "{docx_path}" + PDF - items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}')
+            except Exception as e:
+                log.warning(f"PDF conversion failed for {code}: {e}")
+                pdf_failed.append(code)
+                log.info(f'Created doc "{docx_path}" (PDF failed) - items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}')
+            
+            created.append(doc_info)
+            
         except Exception as e:
-            log.error(f"Local save failed for {code}: {e}")
+            log.error(f"Document creation failed for {code}: {e}")
             continue
+
+        if pdf_failed:
+            log.info(f"PDF conversion failed for: {', '.join(pdf_failed)}")
 
     return created
 
