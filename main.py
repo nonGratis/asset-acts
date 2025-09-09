@@ -338,15 +338,12 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
     return per_owner, stats
 
 
-# ---------------------- Helpers: numbers & money -> words ----------------------
-
 def money_to_words(amount: Decimal, lang: str = "uk") -> str:
     q = quantize_money(amount)
     total_kop = int((q * 100).to_integral_value(rounding=ROUND_HALF_UP))
     hryv = total_kop // 100
     kop = total_kop % 100
     hryv_words = num2words(hryv, lang=lang)
-    # Ensure two-digit fractional part
     return f"{hryv_words} грн. {kop:02d} коп."
 
 
@@ -484,7 +481,7 @@ def save_docx_locally(template_path: str, output_path: str, mapping: dict, items
 
 
 def create_act_docs_local(per_owner: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Save all documents locally (no Drive interaction)."""
+    """Save all documents locally"""
     created = []
     for code, data in per_owner.items():
         if not data["items"]:
