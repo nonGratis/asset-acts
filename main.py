@@ -227,7 +227,7 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
         try:
             name = safe_get(row, COL_NAME, "")
             invnum = safe_get(row, COL_INVENTORY_NUMBER, "")
-            unit = safe_get(row, COL_UNIT, "")
+            unit = safe_get(row, COL_UNIT, "").lower()
             qty_raw = safe_get(row, COL_QUANTITY, "")
             price_raw = safe_get(row, COL_PRICE, "")
             owners_raw = safe_get(row, COL_OWNERS, "")
