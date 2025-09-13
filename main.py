@@ -4,6 +4,13 @@ import sys
 import copy
 import logging
 
+
+import fitz
+from PIL import Image
+import os
+from io import BytesIO
+
+
 from docx import Document
 from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Dict, Any, Tuple
@@ -565,6 +572,19 @@ def create_act_docs_local(per_owner: Dict[str, Any]) -> List[Dict[str, Any]]:
             
             created.append(doc_info)
             
+            
+            # Create JPEG
+            try:
+                pdf_path = convert_to_pdf(docx_path)
+                jpeg_path = convert_to_jpeg(pdf_path)
+                doc_info["pdf_path"] = pdf_path
+                doc_info["jpeg_path"] = jpeg_path
+                pdf_created.append(code)
+                log.info(f'Created docs "{docx_path}" + PDF + JPEG - items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}')
+            except Exception as e:
+                raise RuntimeError(f"JPEG conversion failed: {e}")
+
+            
         except Exception as e:
             log.error(f"Document creation failed for {code}: {e}")
             continue
@@ -574,6 +594,46 @@ def create_act_docs_local(per_owner: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     return created
 
+def convert_to_jpeg(pdf_path: str) -> str:   
+    jpeg_path = pdf_path.replace(".pdf", ".jpg")
+    jpeg_dir = os.path.dirname(jpeg_path).replace(OUTPUT_LOCAL_DIR_PDF, "jpegs")
+    jpeg_path = os.path.join(jpeg_dir, os.path.basename(jpeg_path))
+    
+    os.makedirs(jpeg_dir, exist_ok=True)
+    
+    try:
+        doc = fitz.open(pdf_path)
+        page = doc[0]
+        
+        # Calculate longest side
+        rect = page.rect
+        zoom_x = 1280 / max(rect.width, rect.height)
+        mat = fitz.Matrix(zoom_x, zoom_x)
+        
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+        img_data = pix.tobytes("ppm")
+        
+        img = Image.open(BytesIO(img_data))
+        img = resize_to_max_dimension(img, 1280)
+        
+        img.save(jpeg_path, "JPEG", quality=100, optimize=False)
+        doc.close()
+        
+        return jpeg_path
+        
+    except Exception as e:
+        raise RuntimeError(f"JPEG conversion failed: {e}")
+
+def resize_to_max_dimension(img: Image.Image, max_size: int) -> Image.Image:
+    """Resize image maintaining aspect ratio with max dimension constraint."""
+    w, h = img.size
+    if max(w, h) <= max_size:
+        return img
+    
+    ratio = max_size / max(w, h)
+    new_size = (int(w * ratio), int(h * ratio))
+    
+    return img.resize(new_size, Image.Resampling.LANCZOS)
 
 def main():
     check_constants()
