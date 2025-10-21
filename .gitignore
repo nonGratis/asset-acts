@@ -83,3 +83,8 @@ nosetests.xml
 # Output documents
 *.docx
 *.pdf
+*.jpeg
+*.jpg
+*.png
+*.svg
+
