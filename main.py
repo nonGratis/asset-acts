@@ -18,6 +18,7 @@ from typing import List, Dict, Any, Tuple
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaFileUpload
 
 from num2words import num2words
 from docx.oxml.ns import qn
@@ -32,6 +33,8 @@ ASSETS_SHEET_NAME = "list"
 
 DEPARTMENTS_SPREADSHEET_ID = "1N45PcHU-YgpcYEyXDbQRCG94I-BWbrultIyqRr5Z4N8"
 DEPARTMENTS_SHEET_NAME = "Department"
+
+SHARED_DRIVE_ID = "0AA1wCLB8zuqdUk9PVA"
 
 OUTPUT_LOCAL_DIR_DOC = "docs"
 OUTPUT_LOCAL_DIR_PDF = "pdfs"
@@ -74,6 +77,7 @@ def check_constants() -> None:
     for keyname, value in (
         ("ASSETS_SPREADSHEET_ID", ASSETS_SPREADSHEET_ID),
         ("DEPARTMENTS_SPREADSHEET_ID", DEPARTMENTS_SPREADSHEET_ID),
+        ("SHARED_DRIVE_ID", SHARED_DRIVE_ID),
     ):
         if not value:
             missing.append(f"Missing constant {keyname}")
@@ -512,6 +516,27 @@ def save_docx_locally(template_path: str, output_path: str, mapping: dict, items
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     doc.save(output_path)
 
+def upload_to_drive(drive_service, file_path: str, file_name: str) -> str:
+    """Upload file to Google Drive shared drive."""
+    try:
+        media = MediaFileUpload(file_path, mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        
+        file_metadata = {
+            'name': file_name,
+            'parents': [SHARED_DRIVE_ID]
+        }
+        
+        file = drive_service.files().create(
+            body=file_metadata,
+            media_body=media,
+            supportsAllDrives=True
+        ).execute()
+        
+        return file.get('id')
+        
+    except HttpError as e:
+        raise RuntimeError(f"Drive upload failed: {e}")
+
 def convert_to_pdf(docx_path: str) -> str:
     """Convert DOCX to PDF. Returns PDF path on success."""
 
@@ -527,11 +552,13 @@ def convert_to_pdf(docx_path: str) -> str:
     except Exception as e:
         raise RuntimeError(f"PDF conversion failed: {e}")
 
-def create_act_docs_local(per_owner: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Save all documents locally"""
+def create_act_docs_local(per_owner: Dict[str, Any], drive_service) -> List[Dict[str, Any]]:
+    """Save all documents locally and upload to Google Drive"""
     created = []
     pdf_created = []
     pdf_failed = []
+    upload_success = []
+    upload_failed = []
     
     for code, data in per_owner.items():
         if not data["items"]:
@@ -559,6 +586,19 @@ def create_act_docs_local(per_owner: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "sum": data["tot_sum"],
             }
             
+            # Upload to Google Drive
+            try:
+                drive_file_id = upload_to_drive(drive_service, docx_path, f"{file_name}.docx")
+                doc_info["drive_file_id"] = drive_file_id
+                upload_success.append(code)
+                log.info(f'Created and uploaded "{file_name}.docx" (ID: {drive_file_id}) - items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}')
+            except Exception as e:
+                log.warning(f"Drive upload failed for {code}: {e}")
+                upload_failed.append(code)
+                log.info(f'Created local "{docx_path}" (upload failed) - items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}')
+            
+            created.append(doc_info)
+                        
             # Create PDF
             try:
                 pdf_path = convert_to_pdf(docx_path)
@@ -589,8 +629,8 @@ def create_act_docs_local(per_owner: Dict[str, Any]) -> List[Dict[str, Any]]:
             log.error(f"Document creation failed for {code}: {e}")
             continue
 
-        if pdf_failed:
-            log.info(f"PDF conversion failed for: {', '.join(pdf_failed)}")
+    if upload_failed:
+        log.info(f"Drive upload failed for: {', '.join(upload_failed)}")
 
     return created
 
@@ -653,7 +693,7 @@ def main():
         log.info("No valid owners/items found; nothing to generate.")
         return
 
-    created = create_act_docs_local(per_owner)
+    created = create_act_docs_local(per_owner, drive_svc)
 
     log.info(f"rows_processed={stats['rows_processed']}, rows_skipped={stats['rows_skipped']}, owners_skipped={stats['owners_skipped']}, acts_generated={len(created)}, items_in_acts={stats['total_items_in_acts']}, total_value_generated={fmt_number(stats['total_value_generated'])}")
 
