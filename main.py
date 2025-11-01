@@ -610,8 +610,6 @@ def create_act_docs_local(per_owner: Dict[str, Any], drive_service) -> List[Dict
                 pdf_failed.append(code)
                 log.info(f'Created doc "{docx_path}" (PDF failed) - items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}')
             
-            created.append(doc_info)
-            
             
             # Create JPEG
             try:
