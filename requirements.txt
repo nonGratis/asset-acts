@@ -13,6 +13,10 @@ python-docx>=0.8.11
 # PDF export
 docx2pdf
 
+# PDF to JPEG conversion
+PyMuPDF>=1.23.0
+Pillow>=10.0.0
+
 # Numbers to words
 num2words>=0.5.12
 
