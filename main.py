@@ -3,12 +3,10 @@ import re
 import sys
 import copy
 import logging
-
+from io import BytesIO
 
 import fitz
 from PIL import Image
-import os
-from io import BytesIO
 
 
 from docx import Document
@@ -74,6 +72,8 @@ def check_constants() -> None:
     missing = []
     if not os.path.isfile(SERVICE_ACCOUNT_KEYFILE):
         missing.append(f"SERVICE_ACCOUNT_KEYFILE file not found: {SERVICE_ACCOUNT_KEYFILE}")
+    if not os.path.isfile("template.docx"):
+        missing.append("Template file not found: template.docx")
     for keyname, value in (
         ("ASSETS_SPREADSHEET_ID", ASSETS_SPREADSHEET_ID),
         ("DEPARTMENTS_SPREADSHEET_ID", DEPARTMENTS_SPREADSHEET_ID),
@@ -555,9 +555,6 @@ def convert_to_pdf(docx_path: str) -> str:
 def create_act_docs_local(per_owner: Dict[str, Any], drive_service) -> List[Dict[str, Any]]:
     """Save all documents locally and upload to Google Drive"""
     created = []
-    pdf_created = []
-    pdf_failed = []
-    upload_success = []
     upload_failed = []
     
     for code, data in per_owner.items():
@@ -590,7 +587,6 @@ def create_act_docs_local(per_owner: Dict[str, Any], drive_service) -> List[Dict
             try:
                 drive_file_id = upload_to_drive(drive_service, docx_path, f"{file_name}.docx")
                 doc_info["drive_file_id"] = drive_file_id
-                upload_success.append(code)
                 log.info(f'Created and uploaded "{file_name}.docx" (ID: {drive_file_id}) - items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}')
             except Exception as e:
                 log.warning(f"Drive upload failed for {code}: {e}")
@@ -599,28 +595,22 @@ def create_act_docs_local(per_owner: Dict[str, Any], drive_service) -> List[Dict
             
             created.append(doc_info)
                         
-            # Create PDF
+            # Create PDF and JPEG
             try:
                 pdf_path = convert_to_pdf(docx_path)
                 doc_info["pdf_path"] = pdf_path
-                pdf_created.append(code)
-                log.info(f'Created docs "{docx_path}" + PDF - items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}')
+                
+                try:
+                    jpeg_path = convert_to_jpeg(pdf_path)
+                    doc_info["jpeg_path"] = jpeg_path
+                    log.info(f'Created docs "{docx_path}" + PDF + JPEG - items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}')
+                except Exception as jpeg_err:
+                    log.warning(f"JPEG conversion failed for {code}: {jpeg_err}")
+                    log.info(f'Created docs "{docx_path}" + PDF - items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}')
+                
             except Exception as e:
                 log.warning(f"PDF conversion failed for {code}: {e}")
-                pdf_failed.append(code)
-                log.info(f'Created doc "{docx_path}" (PDF failed) - items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}')
-            
-            
-            # Create JPEG
-            try:
-                pdf_path = convert_to_pdf(docx_path)
-                jpeg_path = convert_to_jpeg(pdf_path)
-                doc_info["pdf_path"] = pdf_path
-                doc_info["jpeg_path"] = jpeg_path
-                pdf_created.append(code)
-                log.info(f'Created docs "{docx_path}" + PDF + JPEG - items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}')
-            except Exception as e:
-                raise RuntimeError(f"JPEG conversion failed: {e}")
+                log.info(f'Created doc "{docx_path}" (PDF/JPEG skipped) - items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}')
 
             
         except Exception as e:
@@ -675,7 +665,7 @@ def resize_to_max_dimension(img: Image.Image, max_size: int) -> Image.Image:
 
 def main():
     check_constants()
-    sheets_svc, drive_svc, docs_svc = build_services()
+    sheets_svc, drive_svc, _ = build_services()
 
     try:
         ensure_file_is_spreadsheet(drive_svc, ASSETS_SPREADSHEET_ID, "Assets spreadsheet")
