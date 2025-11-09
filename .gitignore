@@ -48,7 +48,6 @@ logs/
 
 # Local env and secrets
 .env
-.env.* 
 .env.json
 secrets.json
 *.secret
