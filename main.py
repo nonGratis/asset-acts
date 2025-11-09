@@ -10,6 +10,7 @@ from PIL import Image
 from dotenv import load_dotenv
 
 from docx import Document
+from docx.document import Document as DocumentType
 from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Dict, Any, Tuple
 
@@ -484,7 +485,7 @@ def replace_placeholder_preserve_runs(paragraph, mapping: dict):
             if placeholder in run.text:
                 run.text = run.text.replace(placeholder, str(v))
 
-def replace_placeholders_doc(doc: Document, mapping: dict):
+def replace_placeholders_doc(doc: DocumentType, mapping: dict):
     """Replace all placeholders in the document while preserving formatting."""
     # Paragraphs
     for p in doc.paragraphs:
