@@ -28,12 +28,34 @@ source .venv/Scripts/activate   # Linux / macOS
 pip install -r requirements.txt
 ```
 
-### 4. Prepare files
+### 4. Configure environment
 
-* **`credentials.json`** → Google API service account file.
+Copy `.env.example` to `.env` and update with your values:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your credentials:
+
+```env
+# Google Service Account Credentials
+GOOGLE_CREDS_PATH=credentials.json
+
+# Google Spreadsheet IDs
+ASSETS_SHEET_ID=your_assets_spreadsheet_id_here
+DEPARTMENTS_SHEET_ID=your_departments_spreadsheet_id_here
+
+# Google Drive
+SHARED_DRIVE_ID=your_shared_drive_id_here
+```
+
+### 5. Prepare files
+
+* **`credentials.json`** → Google API service account file (path from `GOOGLE_CREDS_PATH`)
 * **`template.docx`** → Word template with placeholders
 
-### 5. Run
+### 6. Run
 
 ```bash
 python main.py

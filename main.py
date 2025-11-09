@@ -7,7 +7,7 @@ from io import BytesIO
 
 import fitz
 from PIL import Image
-
+from dotenv import load_dotenv
 
 from docx import Document
 from decimal import Decimal, ROUND_HALF_UP
@@ -24,15 +24,17 @@ from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx2pdf import convert as docx2pdf_convert
 
-SERVICE_ACCOUNT_KEYFILE = "credentials.json"
+load_dotenv()
 
-ASSETS_SPREADSHEET_ID = "1XbJuTGtwiQNFzxqOM5F1ehOE5PRmd1GFzi2HFmZnoWE"
+SERVICE_ACCOUNT_KEYFILE = os.getenv("GOOGLE_CREDS_PATH", "credentials.json")
+
+ASSETS_SPREADSHEET_ID = os.getenv("ASSETS_SHEET_ID")
 ASSETS_SHEET_NAME = "list"
 
-DEPARTMENTS_SPREADSHEET_ID = "1N45PcHU-YgpcYEyXDbQRCG94I-BWbrultIyqRr5Z4N8"
+DEPARTMENTS_SPREADSHEET_ID = os.getenv("DEPARTMENTS_SHEET_ID")
 DEPARTMENTS_SHEET_NAME = "Department"
 
-SHARED_DRIVE_ID = "0AA1wCLB8zuqdUk9PVA"
+SHARED_DRIVE_ID = os.getenv("SHARED_DRIVE_ID")
 
 OUTPUT_LOCAL_DIR_DOC = "docs"
 OUTPUT_LOCAL_DIR_PDF = "pdfs"

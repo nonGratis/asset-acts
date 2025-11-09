@@ -1,3 +1,6 @@
+# Environment variables
+python-dotenv>=1.0.0
+
 # Google APIs & auth
 google-api-python-client>=2.70.0
 google-auth>=2.20.0
