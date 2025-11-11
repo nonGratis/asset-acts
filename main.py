@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from docx import Document
 from docx.document import Document as DocumentType
 from decimal import Decimal, ROUND_HALF_UP
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -208,7 +208,7 @@ def load_departments(sheets_service) -> Dict[str, Dict[str, str]]:
     return depts
 
 
-def parse_owner_token(tok: str) -> Tuple[str, int, bool]:
+def parse_owner_token(tok: str) -> Tuple[str, Optional[int], bool]:
     tok = tok.strip()
     m = re.match(r"^(.*?)-\s*([0-9]+)\s*$", tok)
     if m:
