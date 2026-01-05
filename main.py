@@ -138,6 +138,15 @@ def safe_get(row: list, col: int, default=""):
     return val if val is not None else default
 
 
+def log_row_data(row: list, columns: List[Tuple[str, int]]) -> str:
+    data = {}
+    for name, idx in columns:
+        val = str(safe_get(row, idx, "")).strip()
+        if val:
+            data[name] = val
+    return str(data) if data else "{empty row}"
+
+
 def parse_number(s) -> Decimal:
     if s is None:
         log.error("Empty numeric")
@@ -194,7 +203,13 @@ def load_departments(sheets_service) -> Dict[str, Dict[str, str]]:
     for i, row in enumerate(vals[1:], start=2):
         code = str(safe_get(row, DEPT_COL_CODE, "")).strip()
         if not code:
-            log.warning(f"Departments row {i} missing code; skipping.")
+            row_data = log_row_data(row, [
+                ("fullname", DEPT_COL_FULLNAME),
+                ("type", DEPT_COL_TYPE),
+                ("position", DEPT_COL_POSITION),
+                ("normalized", DEPT_COL_NORMALIZED)
+            ])
+            log.warning(f"Departments row {i} missing code; skipping. Row data: {row_data}")
             continue
         key = normalize_code(code)
         depts[key] = {
@@ -247,7 +262,14 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
             owners_raw = safe_get(row, COL_OWNERS, "")
 
             if not name:
-                log.warning(f"Row {rindex} missing name; skipping.")
+                row_data = log_row_data(row, [
+                    ("inventory", COL_INVENTORY_NUMBER),
+                    ("unit", COL_UNIT),
+                    ("qty", COL_QUANTITY),
+                    ("price", COL_PRICE),
+                    ("owners", COL_OWNERS)
+                ])
+                log.warning(f"Row {rindex} missing name; skipping. Row data: {row_data}")
                 rows_skipped += 1
                 continue
 
@@ -267,7 +289,13 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
 
         tokens = [t.strip() for t in str(owners_raw).split(",") if t.strip()]
         if not tokens:
-            log.error(f"Row {rindex} no owners; skip.")
+            row_data = log_row_data(row, [
+                ("name", COL_NAME),
+                ("inventory", COL_INVENTORY_NUMBER),
+                ("qty", COL_QUANTITY),
+                ("price", COL_PRICE)
+            ])
+            log.error(f"Row {rindex} no owners; skip. Row data: {row_data}")
             rows_skipped += 1
             continue
 
@@ -281,17 +309,25 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
 
         if any_explicit:
             if not all(t[2] for t in token_infos):
-                log.error(f"Row {rindex} mixed explicit and implicit owners; skip.")
+                row_data = log_row_data(row, [
+                    ("name", COL_NAME),
+                    ("owners", COL_OWNERS)
+                ])
+                log.error(f"Row {rindex} mixed explicit and implicit owners; skip. Row data: {row_data}")
                 rows_skipped += 1
                 continue
             total_spec = sum(t[1] for t in token_infos)
             if total_spec != qty:
-                log.error(f"Row {rindex} owner counts sum {total_spec} != quantity {qty}; skip.")
+                log.error(f"Row {rindex} owner sum {total_spec} != qty {qty} | name='{name}' owners='{owners_raw}'")
                 rows_skipped += 1
                 continue
         else:
             if len(token_infos) != 1:
-                log.error(f"Row {rindex} ambiguous multiple owners without counts; skip.")
+                row_data = log_row_data(row, [
+                    ("name", COL_NAME),
+                    ("owners", COL_OWNERS)
+                ])
+                log.error(f"Row {rindex} ambiguous multiple owners without counts; skip. Row data: {row_data}")
                 rows_skipped += 1
                 continue
             base = token_infos[0][0]
