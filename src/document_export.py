@@ -1,6 +1,7 @@
 import os
 from io import BytesIO
 from typing import Dict, Any, List
+from datetime import datetime
 
 import fitz
 from PIL import Image
@@ -194,7 +195,8 @@ def create_act_docs_local(per_owner: Dict[str, Any], drive_service) -> List[Dict
             continue
 
         dept = data["dept"]
-        file_name = FILE_NAME_PATTERN.format(deptname=dept.get("code"))
+        date_str = datetime.now().strftime("%Y %m %d")
+        file_name = FILE_NAME_PATTERN.format(date=date_str, deptname=dept.get("code"))
         mapping = build_mapping_for_owner(data, dept)
 
         try:

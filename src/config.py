@@ -41,7 +41,7 @@ DEPT_COL_FULLNAME = 4
 DEPT_COL_NORMALIZED = 5
 
 # Document Generation Settings
-FILE_NAME_PATTERN = "Акт. {deptname}"
+FILE_NAME_PATTERN = "{date} Акт. {deptname}"
 TEMPLATE_PATH = "template.docx"
 
 # Number Formatting Settings
