@@ -8,6 +8,7 @@ from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from num2words import num2words
 from .formatters import fmt_number, money_to_words
+from .config import log
 
 
 def build_mapping_for_owner(data: Dict[str, Any], dept: Dict[str, str]) -> Dict[str, str]:
@@ -22,6 +23,14 @@ def build_mapping_for_owner(data: Dict[str, Any], dept: Dict[str, str]) -> Dict[
     tot_qty = int(data.get("tot_qty", 0))
     tot_sum = data.get("tot_sum", Decimal("0.00"))
 
+    receiver_position = dept.get("receiver_position", "")
+    receiver_name = dept.get("receiver_normalized", "")
+    
+    if not receiver_position:
+        log.warning(f"Department '{dept.get('code', '')}' has empty receiver position")
+    if not receiver_name:
+        log.warning(f"Department '{dept.get('code', '')}' has empty receiver name")
+    
     mapping = {
         "TotalQuantityWords": num2words(tot_qty, lang="uk"),
         "TotalQuantityNumeric": str(tot_qty),
@@ -29,6 +38,8 @@ def build_mapping_for_owner(data: Dict[str, Any], dept: Dict[str, str]) -> Dict[
         "TotalSumWords": money_to_words(tot_sum, lang="uk"),
         "SecondDirectorPosition": dept.get("position", ""),
         "SecondDirectorName": dept.get("normalized", ""),
+        "ReceiverPosition": receiver_position,
+        "ReceiverName": receiver_name,
         "Val": fmt_number(tot_sum),
     }
     return mapping

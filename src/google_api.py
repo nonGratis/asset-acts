@@ -26,6 +26,8 @@ from .config import (
     DEPT_COL_POSITION,
     DEPT_COL_FULLNAME,
     DEPT_COL_NORMALIZED,
+    DEPT_COL_RECEIVER_POSITION,
+    DEPT_COL_RECEIVER_NORMALIZED,
     ALLOW_ROUNDING_ADJUST,
     log,
 )
@@ -170,6 +172,8 @@ def load_departments(sheets_service) -> Dict[str, Dict[str, str]]:
             "position": safe_get(row, DEPT_COL_POSITION, ""),
             "fullname": safe_get(row, DEPT_COL_FULLNAME, ""),
             "normalized": safe_get(row, DEPT_COL_NORMALIZED, ""),
+            "receiver_position": safe_get(row, DEPT_COL_RECEIVER_POSITION, ""),
+            "receiver_normalized": safe_get(row, DEPT_COL_RECEIVER_NORMALIZED, ""),
         }
     return depts
 
