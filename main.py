@@ -1,5 +1,6 @@
 import sys
 
+from src.cli import setup_args, apply_args
 from src.config import ASSETS_SPREADSHEET_ID, DEPARTMENTS_SPREADSHEET_ID, log
 from src.google_api import (
     check_constants,
@@ -44,6 +45,8 @@ def main():
 
 if __name__ == "__main__":
     try:
+        args = setup_args()
+        apply_args(args)
         main()
     except Exception as exc:
         log.error(f"Unhandled exception: {exc}")
