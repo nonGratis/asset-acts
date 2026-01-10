@@ -225,10 +225,25 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
             price_raw = safe_get(row, COL_PRICE, "")
             owners_raw = safe_get(row, COL_OWNERS, "")
 
-            if not name:
+            missing_fields = []
+            if not str(name).strip():
+                missing_fields.append("name")
+            if not str(invnum).strip():
+                missing_fields.append("inventory_number")
+            if not str(unit).strip():
+                missing_fields.append("unit")
+            if not str(qty_raw).strip():
+                missing_fields.append("quantity")
+            if not str(price_raw).strip():
+                missing_fields.append("price")
+            if not str(owners_raw).strip():
+                missing_fields.append("owners")
+
+            if missing_fields:
                 row_data = log_row_data(
                     row,
                     [
+                        ("name", COL_NAME),
                         ("inventory", COL_INVENTORY_NUMBER),
                         ("unit", COL_UNIT),
                         ("qty", COL_QUANTITY),
@@ -236,7 +251,10 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
                         ("owners", COL_OWNERS),
                     ],
                 )
-                log.warning(f"Row {rindex} missing name; skipping. Row data: {row_data}")
+                log.error(
+                    f"Row {rindex} missing required fields: {', '.join(missing_fields)}; skipping. "
+                    f"Row data: {row_data}"
+                )
                 rows_skipped += 1
                 continue
 
