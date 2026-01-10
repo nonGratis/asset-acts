@@ -254,7 +254,14 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
             rows_skipped += 1
             continue
 
-        tokens = [t.strip() for t in str(owners_raw).split(",") if t.strip()]
+        owners_raw_str = str(owners_raw)
+        tokens = []
+        for line in owners_raw_str.split('\n'):
+            for token in line.split(','):
+                token = token.strip()
+                if token:
+                    tokens.append(token)
+        
         if not tokens:
             row_data = log_row_data(
                 row,
