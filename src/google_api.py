@@ -1,6 +1,6 @@
 import os
 from decimal import Decimal
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -38,6 +38,7 @@ from .data_utils import (
     quantize_money,
     normalize_code,
     parse_owner_token,
+    ProcessingStats,
 )
 
 
@@ -193,20 +194,10 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
     vals = read_sheet_values(sheets_service, ASSETS_SPREADSHEET_ID, ASSETS_SHEET_NAME)
     if not vals or len(vals) < 2:
         log.info("No assets rows found.")
-        return {}, {
-            "rows_processed": 0,
-            "rows_skipped": 0,
-            "owners_skipped": 0,
-            "total_items_in_acts": 0,
-            "total_value_generated": Decimal("0.00"),
-        }
+        return {}, ProcessingStats().to_dict()
 
-    rows_processed = 0
-    rows_skipped = 0
-    owners_skipped = 0
+    stats = ProcessingStats()
     per_owner: Dict[str, Dict[str, Any]] = {}
-    total_items_in_acts = 0
-    total_value_generated = Decimal("0.00")
 
     for rindex, row in enumerate(vals[1:], start=2):
         if not any(str(cell).strip() for cell in row):
@@ -214,7 +205,7 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
 
         gen_flag = safe_get(row, COL_GENERATE_FLAG, "")
         if str(gen_flag).strip().upper() != "TRUE":
-            rows_skipped += 1
+            stats.skip_row()
             continue
 
         try:
@@ -369,16 +360,8 @@ def parse_assets(sheets_service, departments: Dict[str, Dict[str, str]]):
             )
             per_owner[key]["tot_qty"] += int(oqty)
             per_owner[key]["tot_sum"] += osum
-            total_items_in_acts += 1
-            total_value_generated += osum
+            stats.add_item(osum)
 
-        rows_processed += 1
+        stats.process_row()
 
-    stats = {
-        "rows_processed": rows_processed,
-        "rows_skipped": rows_skipped,
-        "owners_skipped": owners_skipped,
-        "total_items_in_acts": total_items_in_acts,
-        "total_value_generated": total_value_generated,
-    }
-    return per_owner, stats
+    return per_owner, stats.to_dict()

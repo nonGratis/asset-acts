@@ -1,6 +1,6 @@
 import re
 from decimal import Decimal, ROUND_HALF_UP
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict, Any
 
 from .config import log
 
@@ -112,3 +112,36 @@ def parse_owner_token(tok: str) -> Tuple[str, Optional[int], bool]:
     if m:
         return m.group(1).strip(), int(m.group(2)), True
     return tok, None, False
+class ProcessingStats:
+    def __init__(self):
+        self.rows_processed = 0
+        self.rows_skipped = 0
+        self.owners_skipped = 0
+        self.total_items_in_acts = 0
+        self.total_value_generated = Decimal("0.00")
+
+    def skip_row(self) -> None:
+        self.rows_skipped += 1
+
+    def process_row(self) -> None:
+        self.rows_processed += 1
+
+    def skip_owner(self) -> None:
+        self.owners_skipped += 1
+
+    def add_item(self, value: Decimal) -> None:
+        self.total_items_in_acts += 1
+        self.total_value_generated += value
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Returns:
+            Dictionary with all statistics
+        """
+        return {
+            "rows_processed": self.rows_processed,
+            "rows_skipped": self.rows_skipped,
+            "owners_skipped": self.owners_skipped,
+            "total_items_in_acts": self.total_items_in_acts,
+            "total_value_generated": self.total_value_generated,
+        }
