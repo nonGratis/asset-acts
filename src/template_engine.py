@@ -13,7 +13,7 @@ def build_mapping_for_owner(data: Dict[str, Any], dept: Dict[str, str]) -> Dict[
     tot_sum = data.get("tot_sum", Decimal("0.00"))
 
     receiver_position = dept.get("receiver_position", "")
-    receiver_name = dept.get("receiver_normalized", "")
+    receiver_name = dept.get("receiver_formatted", "")
     
     if not receiver_position:
         log.warning(f"Department '{dept.get('code', '')}' has empty receiver position")
@@ -26,7 +26,7 @@ def build_mapping_for_owner(data: Dict[str, Any], dept: Dict[str, str]) -> Dict[
         "TotalSumNumeric": fmt_number(tot_sum),
         "TotalSumWords": money_to_words(tot_sum, lang="uk"),
         "SecondDirectorPosition": dept.get("position", ""),
-        "SecondDirectorName": dept.get("normalized", ""),
+        "SecondDirectorName": dept.get("formatted_name", ""),
         "ReceiverPosition": receiver_position,
         "ReceiverName": receiver_name,
         "Val": fmt_number(tot_sum),

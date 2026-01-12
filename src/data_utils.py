@@ -84,6 +84,22 @@ def quantize_money(d: Decimal) -> Decimal:
     return d.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+def format_ukrainian_name(full_name: str) -> str:
+    parts = full_name.strip().split()
+    
+    if len(parts) < 2:
+        log.error(f"Name '{full_name}' has less than 2 words")
+        raise ValueError(f"Invalid name format: '{full_name}'")
+    
+    if len(parts) > 3:
+        log.warning(f"Name '{full_name}' has more than 3 words")
+    
+    first_name = parts[1]
+    last_name = parts[0].upper()
+    
+    return f"{first_name} {last_name}"
+
+
 def parse_owner_token(tok: str) -> Tuple[str, Optional[int], bool]:
     """Parse owner token to extract base code, quantity, and explicit flag.
 
@@ -133,10 +149,6 @@ class ProcessingStats:
         self.total_value_generated += value
 
     def to_dict(self) -> Dict[str, Any]:
-        """
-        Returns:
-            Dictionary with all statistics
-        """
         return {
             "rows_processed": self.rows_processed,
             "rows_skipped": self.rows_skipped,

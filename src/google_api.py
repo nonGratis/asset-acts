@@ -25,9 +25,8 @@ from .config import (
     DEPT_COL_STATUS,
     DEPT_COL_POSITION,
     DEPT_COL_FULLNAME,
-    DEPT_COL_NORMALIZED,
     DEPT_COL_RECEIVER_POSITION,
-    DEPT_COL_RECEIVER_NORMALIZED,
+    DEPT_COL_RECEIVER_FULLNAME,
     ALLOW_ROUNDING_ADJUST,
     log,
 )
@@ -38,6 +37,7 @@ from .data_utils import (
     quantize_money,
     parse_owner_token,
     validate_required_fields,
+    format_ukrainian_name,
     ProcessingStats,
 )
 
@@ -161,20 +161,36 @@ def load_departments(sheets_service) -> Dict[str, Dict[str, str]]:
                 [
                     ("fullname", DEPT_COL_FULLNAME),
                     ("position", DEPT_COL_POSITION),
-                    ("normalized", DEPT_COL_NORMALIZED),
                 ],
             )
             log.warning(f"Departments row {i} missing code; skipping. Row data: {row_data}")
             continue
+        
+        fullname = safe_get(row, DEPT_COL_FULLNAME, "")
+        receiver_fullname = safe_get(row, DEPT_COL_RECEIVER_FULLNAME, "")
+        
+        try:
+            formatted_name = format_ukrainian_name(fullname) if fullname else ""
+        except ValueError as e:
+            log.error(f"Departments row {i}: {e}; skipping.")
+            continue
+        
+        try:
+            receiver_formatted = format_ukrainian_name(receiver_fullname) if receiver_fullname else ""
+        except ValueError as e:
+            log.error(f"Departments row {i} receiver name: {e}; skipping.")
+            continue
+        
         key = code
         depts[key] = {
             "code": safe_get(row, DEPT_COL_CODE, ""),
             "status": safe_get(row, DEPT_COL_STATUS, ""),
             "position": safe_get(row, DEPT_COL_POSITION, ""),
-            "fullname": safe_get(row, DEPT_COL_FULLNAME, ""),
-            "normalized": safe_get(row, DEPT_COL_NORMALIZED, ""),
+            "fullname": fullname,
+            "formatted_name": formatted_name,
             "receiver_position": safe_get(row, DEPT_COL_RECEIVER_POSITION, ""),
-            "receiver_normalized": safe_get(row, DEPT_COL_RECEIVER_NORMALIZED, ""),
+            "receiver_fullname": receiver_fullname,
+            "receiver_formatted": receiver_formatted,
         }
     return depts
 
