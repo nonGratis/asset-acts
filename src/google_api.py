@@ -22,7 +22,6 @@ from .config import (
     COL_OWNERS,
     COL_GENERATE_FLAG,
     DEPT_COL_CODE,
-    DEPT_COL_STATUS,
     DEPT_COL_POSITION,
     DEPT_COL_FULLNAME,
     DEPT_COL_RECEIVER_POSITION,
@@ -181,7 +180,6 @@ def load_departments(sheets_service) -> Dict[str, Dict[str, str]]:
         key = code
         depts[key] = {
             "code": safe_get(row, DEPT_COL_CODE, ""),
-            "status": safe_get(row, DEPT_COL_STATUS, ""),
             "position": safe_get(row, DEPT_COL_POSITION, ""),
             "fullname": fullname,
             "formatted_name": formatted_name,
