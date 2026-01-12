@@ -1,6 +1,6 @@
 import os
 from io import BytesIO
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 import fitz
@@ -24,6 +24,11 @@ from .template_engine import (
     prepare_items_for_template,
     render_document,
 )
+
+
+def _generate_file_name(dept_code: str) -> str:
+    date_str = datetime.now().strftime("%Y %m %d")
+    return FILE_NAME_PATTERN.format(date=date_str, deptname=dept_code)
 
 
 def save_docx_locally(template_path: str, output_path: str, mapping: dict, items: list):
@@ -129,95 +134,111 @@ def convert_to_jpeg(pdf_path: str) -> str:
         raise RuntimeError(f"JPEG conversion failed: {e}")
 
 
-def create_act_docs_local(per_owner: Dict[str, Any], drive_service) -> List[Dict[str, Any]]:
-    """Save all documents locally and upload to Google Drive.
+def _create_docx_for_owner(code: str, data: Dict[str, Any], file_name: str) -> Dict[str, Any]:
+    dept = data["dept"]
+    mapping = build_mapping_for_owner(data, dept)
+    docx_path = os.path.join(OUTPUT_LOCAL_DIR_DOC, f"{file_name}.docx")
+    
+    save_docx_locally(
+        template_path=TEMPLATE_PATH,
+        output_path=docx_path,
+        mapping=mapping,
+        items=data["items"],
+    )
+    
+    return {
+        "docx_path": docx_path,
+        "name": file_name,
+        "items": len(data["items"]),
+        "sum": data["tot_sum"],
+    }
 
-    Args:
-        per_owner: Dictionary mapping owner codes to their data
-        drive_service: Google Drive API service instance
 
-    Returns:
-        List of created document info dictionaries
-    """
-    created = []
-    upload_failed = []
+def _upload_to_drive_safe(drive_service, docx_path: str, file_name: str, code: str, 
+                          items_count: int, total_sum) -> Optional[str]:
+    try:
+        drive_file_id = upload_to_drive(drive_service, docx_path, f"{file_name}.docx")
+        log.info(
+            f'Created and uploaded "{file_name}.docx" (ID: {drive_file_id}) - '
+            f'items={items_count} - sum={fmt_number(total_sum)}'
+        )
+        return drive_file_id
+    except Exception as e:
+        log.warning(f"Drive upload failed for {code}: {e}")
+        log.info(
+            f'Created local "{docx_path}" (upload failed) - '
+            f'items={items_count} - sum={fmt_number(total_sum)}'
+        )
+        return None
 
-    for code, data in per_owner.items():
-        if not data["items"]:
-            log.info(f"Owner {code} has no items; skipping.")
-            continue
 
-        dept = data["dept"]
-        date_str = datetime.now().strftime("%Y %m %d")
-        file_name = FILE_NAME_PATTERN.format(date=date_str, deptname=dept.get("code"))
-        mapping = build_mapping_for_owner(data, dept)
-
+def _convert_to_pdf_and_jpeg(docx_path: str, code: str, doc_info: Dict[str, Any]) -> None:
+    items_count = doc_info["items"]
+    total_sum = doc_info["sum"]
+    
+    try:
+        pdf_path = convert_to_pdf(docx_path)
+        doc_info["pdf_path"] = pdf_path
+        
         try:
-            # Create DOCX
-            docx_path = os.path.join(OUTPUT_LOCAL_DIR_DOC, f"{file_name}.docx")
-            save_docx_locally(
-                template_path=TEMPLATE_PATH,
-                output_path=docx_path,
-                mapping=mapping,
-                items=data["items"],
+            jpeg_path = convert_to_jpeg(pdf_path)
+            doc_info["jpeg_path"] = jpeg_path
+            log.info(
+                f'Created docs "{docx_path}" + PDF + JPEG - '
+                f'items={items_count} - sum={fmt_number(total_sum)}'
             )
+        except Exception as jpeg_err:
+            log.warning(f"JPEG conversion failed for {code}: {jpeg_err}")
+            log.info(
+                f'Created docs "{docx_path}" + PDF - '
+                f'items={items_count} - sum={fmt_number(total_sum)}'
+            )
+    except Exception as e:
+        log.warning(f"PDF conversion failed for {code}: {e}")
+        log.info(
+            f'Created doc "{docx_path}" (PDF/JPEG skipped) - '
+            f'items={items_count} - sum={fmt_number(total_sum)}'
+        )
 
-            doc_info = {
-                "docx_path": docx_path,
-                "name": file_name,
-                "items": len(data["items"]),
-                "sum": data["tot_sum"],
-            }
 
-            # Upload to Google Drive
-            try:
-                drive_file_id = upload_to_drive(drive_service, docx_path, f"{file_name}.docx")
-                doc_info["drive_file_id"] = drive_file_id
-                log.info(
-                    f'Created and uploaded "{file_name}.docx" (ID: {drive_file_id}) - '
-                    f'items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}'
-                )
-            except Exception as e:
-                log.warning(f"Drive upload failed for {code}: {e}")
-                upload_failed.append(code)
-                log.info(
-                    f'Created local "{docx_path}" (upload failed) - '
-                    f'items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}'
-                )
+def _process_single_owner(code: str, data: Dict[str, Any], drive_service) -> Optional[Dict[str, Any]]:
+    if not data["items"]:
+        log.info(f"Owner {code} has no items; skipping.")
+        return None
+    
+    dept = data["dept"]
+    file_name = _generate_file_name(dept.get("code"))
+    
+    try:
+        doc_info = _create_docx_for_owner(code, data, file_name)
+        
+        drive_file_id = _upload_to_drive_safe(
+            drive_service, 
+            doc_info["docx_path"], 
+            file_name, 
+            code,
+            doc_info["items"],
+            doc_info["sum"]
+        )
+        
+        if drive_file_id:
+            doc_info["drive_file_id"] = drive_file_id
+        
+        _convert_to_pdf_and_jpeg(doc_info["docx_path"], code, doc_info)
+        
+        return doc_info
+        
+    except Exception as e:
+        log.error(f"Document creation failed for {code}: {e}")
+        return None
 
+
+def create_act_docs_local(per_owner: Dict[str, Any], drive_service) -> List[Dict[str, Any]]:
+    created = []
+    
+    for code, data in per_owner.items():
+        doc_info = _process_single_owner(code, data, drive_service)
+        if doc_info:
             created.append(doc_info)
-
-            # Create PDF and JPEG
-            try:
-                pdf_path = convert_to_pdf(docx_path)
-                doc_info["pdf_path"] = pdf_path
-
-                try:
-                    jpeg_path = convert_to_jpeg(pdf_path)
-                    doc_info["jpeg_path"] = jpeg_path
-                    log.info(
-                        f'Created docs "{docx_path}" + PDF + JPEG - '
-                        f'items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}'
-                    )
-                except Exception as jpeg_err:
-                    log.warning(f"JPEG conversion failed for {code}: {jpeg_err}")
-                    log.info(
-                        f'Created docs "{docx_path}" + PDF - '
-                        f'items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}'
-                    )
-
-            except Exception as e:
-                log.warning(f"PDF conversion failed for {code}: {e}")
-                log.info(
-                    f'Created doc "{docx_path}" (PDF/JPEG skipped) - '
-                    f'items={len(data["items"])} - sum={fmt_number(data["tot_sum"])}'
-                )
-
-        except Exception as e:
-            log.error(f"Document creation failed for {code}: {e}")
-            continue
-
-    if upload_failed:
-        log.info(f"Drive upload failed for: {', '.join(upload_failed)}")
-
+    
     return created
