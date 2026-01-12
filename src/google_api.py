@@ -271,22 +271,24 @@ def _resolve_owners_with_departments(token_infos: list, departments: Dict[str, D
     return owners_for_row
 
 
-def _calculate_owner_amounts(owners_for_row: list, unit_price: Decimal, total_price: Decimal, 
+def _calculate_owner_amounts(owners_for_row: list, unit_price: Decimal, total_price: Decimal,
                              row_index: int) -> list:
     owner_sums = []
     for _, oqty, _ in owners_for_row:
         owner_sums.append(quantize_money(unit_price * Decimal(oqty)))
-    
+
     sum_owner_sums = sum(owner_sums)
-    price_q = quantize_money(total_price)
-    if sum_owner_sums != price_q:
-        diff = price_q - sum_owner_sums
-        if ALLOW_ROUNDING_ADJUST:
+    total_resolved_qty = sum(oqty for _, oqty, _ in owners_for_row)
+    expected_total = quantize_money(unit_price * Decimal(total_resolved_qty))
+
+    if sum_owner_sums != expected_total:
+        diff = expected_total - sum_owner_sums
+        if ALLOW_ROUNDING_ADJUST and owner_sums:
             owner_sums[-1] = quantize_money(owner_sums[-1] + diff)
             log.warning(f"Row {row_index} rounding adjusted by {diff} on last owner.")
         else:
-            log.warning(f"Row {row_index} rounding mismatch {price_q - sum_owner_sums}; continuing.")
-    
+            log.warning(f"Row {row_index} rounding mismatch {expected_total - sum_owner_sums}; continuing.")
+
     return owner_sums
 
 
