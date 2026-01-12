@@ -32,6 +32,7 @@ from .config import (
 )
 from .data_utils import (
     safe_get,
+    is_row_empty,
     log_row_data,
     parse_string_number,
     quantize_money,
@@ -154,31 +155,27 @@ def load_departments(sheets_service) -> Dict[str, Dict[str, str]]:
         log.warning("Departments sheet empty or missing rows.")
         return depts
     for i, row in enumerate(vals[1:], start=2):
-        code = str(safe_get(row, DEPT_COL_CODE, "")).strip()
-        if not code:
-            row_data = log_row_data(
-                row,
-                [
-                    ("fullname", DEPT_COL_FULLNAME),
-                    ("position", DEPT_COL_POSITION),
-                ],
-            )
-            log.warning(f"Departments row {i} missing code; skipping. Row data: {row_data}")
+        if is_row_empty(row):
             continue
         
-        fullname = safe_get(row, DEPT_COL_FULLNAME, "")
-        receiver_fullname = safe_get(row, DEPT_COL_RECEIVER_FULLNAME, "")
+        code = str(safe_get(row, DEPT_COL_CODE, "")).strip()
+        if not code:
+            continue
+        
+        fullname = safe_get(row, DEPT_COL_FULLNAME, "").strip()
+        if not fullname:
+            continue
+        
+        receiver_fullname = safe_get(row, DEPT_COL_RECEIVER_FULLNAME, "").strip()
         
         try:
-            formatted_name = format_ukrainian_name(fullname) if fullname else ""
-        except ValueError as e:
-            log.error(f"Departments row {i}: {e}; skipping.")
+            formatted_name = format_ukrainian_name(fullname)
+        except ValueError:
             continue
         
         try:
             receiver_formatted = format_ukrainian_name(receiver_fullname) if receiver_fullname else ""
-        except ValueError as e:
-            log.error(f"Departments row {i} receiver name: {e}; skipping.")
+        except ValueError:
             continue
         
         key = code

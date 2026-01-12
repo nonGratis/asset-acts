@@ -5,6 +5,12 @@ from typing import List, Tuple, Optional, Dict, Any
 from .config import log
 
 
+def is_row_empty(row: list) -> bool:
+    if not row:
+        return True
+    return not any(str(cell).strip() for cell in row)
+
+
 def safe_get(row: list, col: int, default=""):
     """Return 1-based column from row safely.
 
@@ -88,11 +94,7 @@ def format_ukrainian_name(full_name: str) -> str:
     parts = full_name.strip().split()
     
     if len(parts) < 2:
-        log.error(f"Name '{full_name}' has less than 2 words")
         raise ValueError(f"Invalid name format: '{full_name}'")
-    
-    if len(parts) > 3:
-        log.warning(f"Name '{full_name}' has more than 3 words")
     
     first_name = parts[1]
     last_name = parts[0].upper()
