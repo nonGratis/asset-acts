@@ -84,18 +84,6 @@ def quantize_money(d: Decimal) -> Decimal:
     return d.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def normalize_code(token: str) -> str:
-    """Normalize department/owner code by removing whitespace and converting to uppercase.
-
-    Args:
-        token: Code string to normalize
-
-    Returns:
-        Normalized code string
-    """
-    return re.sub(r"\s+", "", token).upper()
-
-
 def parse_owner_token(tok: str) -> Tuple[str, Optional[int], bool]:
     """Parse owner token to extract base code, quantity, and explicit flag.
 

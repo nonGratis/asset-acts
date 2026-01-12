@@ -36,7 +36,6 @@ from .data_utils import (
     log_row_data,
     parse_string_number,
     quantize_money,
-    normalize_code,
     parse_owner_token,
     validate_required_fields,
     ProcessingStats,
@@ -167,7 +166,7 @@ def load_departments(sheets_service) -> Dict[str, Dict[str, str]]:
             )
             log.warning(f"Departments row {i} missing code; skipping. Row data: {row_data}")
             continue
-        key = normalize_code(code)
+        key = code
         depts[key] = {
             "code": safe_get(row, DEPT_COL_CODE, ""),
             "status": safe_get(row, DEPT_COL_STATUS, ""),
@@ -251,7 +250,7 @@ def _resolve_owners_with_departments(token_infos: list, departments: Dict[str, D
                                       row_index: int, stats: ProcessingStats) -> list:
     owners_for_row = []
     for base, num, _ in token_infos:
-        key = normalize_code(base)
+        key = base.strip()
         dept = departments.get(key)
         if not dept:
             log.error(f"Row {row_index} owner '{base}' not found")
