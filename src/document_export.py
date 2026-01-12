@@ -5,7 +5,6 @@ from datetime import datetime
 
 import fitz
 from PIL import Image
-from docx import Document
 from docx2pdf import convert as docx2pdf_convert
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
@@ -22,40 +21,15 @@ from .config import (
 from .formatters import fmt_number
 from .template_engine import (
     build_mapping_for_owner,
-    replace_placeholders_doc,
-    add_assets_preserve_formatting,
+    prepare_items_for_template,
+    render_document,
 )
 
 
 def save_docx_locally(template_path: str, output_path: str, mapping: dict, items: list):
-    """
-    Args:
-        template_path: path to template DOCX file
-        output_path: path where the output DOCX should be saved
-        mapping: dictionary of placeholder replacements
-        items: list of asset items to add to the table
-    """
-    doc = Document(template_path)
-
-    replace_placeholders_doc(doc, mapping)
-
-    asset_table, header_idx = None, None
-    for table in doc.tables:
-        for i, row in enumerate(table.rows):
-            if any("Назва об’єкта" in (cell.text or "") for cell in row.cells):
-                asset_table, header_idx = table, i
-                break
-        if asset_table:
-            break
-
-    if not asset_table:
-        raise ValueError("Asset table not found")
-
-    add_assets_preserve_formatting(asset_table, header_idx, items)
-
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-    doc.save(output_path)
-
+    context = {**mapping, "items": prepare_items_for_template(items)}
+    render_document(template_path, context, output_path)
 
 def upload_to_drive(drive_service, file_path: str, file_name: str) -> str:
     """Upload file to Google Drive shared drive.
