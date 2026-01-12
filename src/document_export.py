@@ -145,7 +145,6 @@ def convert_to_jpeg(pdf_path: str) -> str:
         img_data = pix.tobytes("ppm")
 
         img = Image.open(BytesIO(img_data))
-        img = resize_to_max_dimension(img, 1280)
 
         img.save(jpeg_path, "JPEG", quality=100, optimize=False)
         doc.close()
@@ -154,26 +153,6 @@ def convert_to_jpeg(pdf_path: str) -> str:
 
     except Exception as e:
         raise RuntimeError(f"JPEG conversion failed: {e}")
-
-
-def resize_to_max_dimension(img: Image.Image, max_size: int) -> Image.Image:
-    """Resize image maintaining aspect ratio with max dimension constraint.
-
-    Args:
-        img: PIL Image object
-        max_size: Maximum dimension (width or height) in pixels
-
-    Returns:
-        Resized PIL Image object
-    """
-    w, h = img.size
-    if max(w, h) <= max_size:
-        return img
-
-    ratio = max_size / max(w, h)
-    new_size = (int(w * ratio), int(h * ratio))
-
-    return img.resize(new_size, Image.Resampling.LANCZOS)
 
 
 def create_act_docs_local(per_owner: Dict[str, Any], drive_service) -> List[Dict[str, Any]]:
