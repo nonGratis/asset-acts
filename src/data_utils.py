@@ -112,6 +112,17 @@ def parse_owner_token(tok: str) -> Tuple[str, Optional[int], bool]:
     if m:
         return m.group(1).strip(), int(m.group(2)), True
     return tok, None, False
+
+
+def validate_required_fields(row: list, field_definitions: List[Tuple[int, str]]) -> List[str]:
+    missing_fields = []
+    for col_idx, field_name in field_definitions:
+        value = safe_get(row, col_idx, "")
+        if not str(value).strip():
+            missing_fields.append(field_name)
+    return missing_fields
+
+
 class ProcessingStats:
     def __init__(self):
         self.rows_processed = 0
