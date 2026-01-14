@@ -3,7 +3,7 @@ from io import BytesIO
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-import fitz
+import pymupdf as fitz
 from PIL import Image
 from docx2pdf import convert as docx2pdf_convert
 from googleapiclient.errors import HttpError
@@ -113,7 +113,7 @@ def convert_to_jpeg(pdf_path: str) -> str:
 
     try:
         doc = fitz.open(pdf_path)
-        page = doc[0]
+        page = doc.load_page(0)
 
         # Calculate zoom to fit longest side to 1280px
         rect = page.rect
